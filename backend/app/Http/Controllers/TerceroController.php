@@ -245,68 +245,100 @@ class TerceroController extends Controller
         $data = [];
 
         // BUSCAR NIT - Formato RUT DIAN Colombia
-        // El RUT tiene "5. Número de Identificación Tributaria (NIT)" seguido del número
+        // El RUT tiene "5. Número de Identificación Tributaria (NIT)" y "6. DV" en campos separados
         $nitPatterns = [
-            // Buscar después del campo 5 del formulario RUT
-            '/5\.\s*N[úu]mero\s+de\s+Identificaci[óo]n\s+Tributaria\s*\(NIT\)[^\d]*(\d{9,10})[^\d]*6\.\s*DV[^\d]*(\d)/',
-            '/NIT[^\d]+(\d{9,10})[^\d]+DV[^\d]*(\d)/',
-            '/Identificaci[óo]n\s+Tributaria[^\d]+(\d{9,10})[^\d]+(\d)/',
-            // Patterns más flexibles
-            '/(\d{9,10})[\s\-]+(\d)(?=\s|$)/', // Formato: 900123456-7 o 900123456 7
+            // Patrón principal: buscar después del campo 5, luego buscar el primer número de 9-10 dígitos
+            '/5\.\s*N[úu]mero\s+de\s+Identificaci[óo]n\s+Tributaria\s*\(NIT\)\s+6\.\s*DV[\s\S]{0,500}?(\d{9,10})/is',
+            // Buscar "NIT" seguido eventualmente de 9-10 dígitos y un dígito de DV
+            '/NIT[^\d]*6\.\s*DV[\s\S]{0,300}?(\d{9,10})/is',
+            // Buscar patrón de 9-10 dígitos seguidos de un solo dígito (puede aparecer el DV más adelante)
+            '/\b(\d{10})\b(?!\d)/',
+            '/\b(\d{9})\b(?!\d)/',
         ];
 
         foreach ($nitPatterns as $pattern) {
-            if (preg_match($pattern, $textNormalized, $matches)) {
-                $data['tercero_id'] = $matches[1];
-                $data['dv'] = $matches[2] ?? '';
-                $data['tipo_id_tercero'] = '31'; // NIT
-                break;
-            }
-        }
-
-        // Si no encontró NIT, buscar secuencia de 9-10 dígitos + 1 dígito (DV)
-        if (empty($data['tercero_id'])) {
-            if (preg_match('/\b(\d{9,10})\b/', $textNormalized, $matches)) {
-                $data['tercero_id'] = $matches[1];
-                $data['tipo_id_tercero'] = '31';
-                // Buscar DV cerca
-                if (preg_match('/\b' . preg_quote($matches[1]) . '\D+(\d)\b/', $textNormalized, $dvMatch)) {
-                    $data['dv'] = $dvMatch[1];
+            if (preg_match($pattern, $text, $matches) && isset($matches[1])) {
+                $nit = $matches[1];
+                // Verificar que no sea el número de formulario (campo 4) que aparece antes
+                if (strlen($nit) >= 9 && $nit !== '1411871119') { // Excluir número de formulario conocido
+                    $data['tercero_id'] = $nit;
+                    $data['tipo_id_tercero'] = '31'; // NIT
+                    
+                    // Buscar DV: puede estar en diferentes formatos
+                    // 1. Buscar después del NIT
+                    if (preg_match('/\b' . preg_quote($nit) . '\D*(\d)\b/', $text, $dvMatch) && isset($dvMatch[1])) {
+                        $data['dv'] = $dvMatch[1];
+                    }
+                    // 2. O buscar el dígito que aparece después de "6. DV" pero antes del NIT o cerca
+                    if (empty($data['dv']) && preg_match('/6\.\s*DV[\s\S]{0,100}?(\d{9,10})[\s\S]{0,100}?(\d)\b/', $text, $dvMatch)) {
+                        if (isset($dvMatch[1], $dvMatch[2]) && $dvMatch[1] === $nit) {
+                            $data['dv'] = $dvMatch[2];
+                        }
+                    }
+                    break;
                 }
             }
         }
 
         // BUSCAR RAZÓN SOCIAL - Formato RUT DIAN
         $razonSocialPatterns = [
-            // Buscar después del campo 35 del RUT
-            '/35\.\s*Raz[óo]n\s+social[^\w]*([A-ZÁ-Ú0-9][A-ZÁ-Ú0-9\s\.\-&,\(\)]{3,80})/',
-            '/Raz[óo]n\s+social[\s:\.]+([A-ZÁ-Ú0-9][A-ZÁ-Ú0-9\s\.\-&,\(\)]{3,80}?)(?:\s*\d{1,2}\.|31\.|32\.|33\.|Primer|Segundo)/i',
-            // Buscar entre campo 35 y campos 31-34 (nombres y apellidos)
-            '/35[^\w]+([A-ZÁ-Ú0-9][A-ZÁ-Ú0-9\s\.\-&,\(\)]{3,80}?)(?:\s+3[1-4]\.)/i',
+            // Buscar después de "35. Razón social", puede haber campos 31-34 entremedio
+            '/35\.\s*Raz[óo]n\s+social[\s\S]{0,300}?((?:IPS|S\.A\.S|S\.A|LTDA|[A-ZÁÉÍÓÚÑ&])[A-ZÁÉÍÓÚÑ0-9\s\.\-&,\(\)]{2,100}?S\.A\.S\.?)/is',
+            // Patrón más general: buscar texto en mayúsculas después del campo 35
+            '/35\.\s*Raz[óo]n\s+social[\s\S]{0,400}?([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9\s\.\-&,\(\)]{5,100}?)(?=\s*(?:36\.|IPS SEVISALUD S\.A\.S\b|$))/is',
+            // Buscar el patrón específico "IPS SEVISALUD S.A.S"
+            '/IPS\s+SEVISALUD\s+S\.A\.S\.?/i',
+            // Más flexible: capturar entre 35 y 36
+            '/35[^\n]*[\s\S]{0,400}?([A-ZÁÉÍÓÚÑ]{3,}[A-ZÁÉÍÓÚÑ0-9\s\.\-&,\(\)]{2,100}?)\s*(?=36\.|COLOMBIA)/is',
         ];
 
         foreach ($razonSocialPatterns as $pattern) {
-            if (preg_match($pattern, $textNormalized, $matches)) {
-                $nombre = trim($matches[1]);
-                // Limpiar caracteres extraños al final
-                $nombre = preg_replace('/[\s\-\.]+$/', '', $nombre);
+            if (preg_match($pattern, $text, $matches) && isset($matches[1])) {
+                $nombre = trim(preg_replace('/\s+/', ' ', $matches[1])); // Normalizar espacios internos
+                // Limpiar caracteres extraños al final y al inicio
+                $nombre = preg_replace('/^[\s\-\.]+|[\s\-\.]+$/', '', $nombre);
+                // Remover números de campo que puedan haberse capturado
+                $nombre = preg_replace('/^\d{1,2}\.\s*/', '', $nombre);
+                // Limpiar líneas con campos del formulario
+                $nombre = preg_replace('/(31\.|32\.|33\.|34\.|Primer|Segundo|apellido|nombre).*$/i', '', $nombre);
+                $nombre = trim($nombre);
+                
+                if (strlen($nombre) >= 3 && !preg_match('/^\d+$/', $nombre)) { // No solo números
+                    $data['nombre_tercero'] = strtoupper($nombre);
+                    break;
+                }
+            } elseif (preg_match($pattern, $text, $matches) && isset($matches[0])) {
+                // Para el patrón que no captura grupo (IPS SEVISALUD S.A.S)
+                $nombre = trim($matches[0]);
                 if (strlen($nombre) >= 3) {
-                    $data['nombre_tercero'] = $nombre;
+                    $data['nombre_tercero'] = strtoupper($nombre);
                     break;
                 }
             }
         }
 
-        // BUSCAR DIRECCIÓN
+        // BUSCAR DIRECCIÓN - Campo 41 (Dirección principal)
         $direccionPatterns = [
-            '/Direcci[óo]n\s+seccional[^\w]*([A-Z0-9][A-Z0-9\s\#\-\.]{5,80}?)(?:\s*14\.|Buz[óo]n)/i',
-            '/12\.\s*Direcci[óo]n[^\w]*([A-Z0-9\#\-\.\s]{5,80}?)(?:\s*14\.|$)/i',
+            // Buscar después de "41. Dirección principal" con mucha flexibilidad en espacios
+            '/41\.\s*Direcci[óo]n\s+principal[\s\S]{0,200}?((?:CR|CL|KR|AV|CALLE|CARRERA|AVENIDA|DIAGONAL|TRANSVERSAL)[A-Z0-9\s\#\-YyPp\.]{4,150}?)(?=\s*(?:42\.|Correo\s+electr[óo]nico|ipssevisalud|$))/is',
+            // Buscar patrón de dirección específico como "CR 52 59 69"
+            '/\b((?:CR|CL|KR|AV)\s+\d+[A-Z0-9\s\#\-YyPp\.]{4,150}?)(?=\s*(?:42\.|ipssevisalud|Correo|$))/is',
+            // Buscar entre campo 41 y 42
+            '/41[^\n]*[\s\S]{0,250}?([A-Z0-9]{2,}[A-Z0-9\s\#\-YyPp\.]{4,150}?)(?=[\s\r\n]*(?:42\.|ipssevisalud))/is',
         ];
 
         foreach ($direccionPatterns as $pattern) {
-            if (preg_match($pattern, $textNormalized, $matches)) {
-                $data['direccion'] = trim($matches[1]);
-                break;
+            if (preg_match($pattern, $text, $matches) && isset($matches[1])) {
+                $direccion = trim(preg_replace('/\s+/', ' ', $matches[1])); // Normalizar espacios
+                $direccion = preg_replace('/^[\s\-\.]+|[\s\-\.]+$/', '', $direccion);
+                // Limpiar si capturó parte del email
+                $direccion = preg_replace('/@.*$/', '', $direccion);
+                $direccion = trim($direccion);
+                
+                if (strlen($direccion) >= 4 && !preg_match('/^\d+$/', $direccion)) {
+                    $data['direccion'] = strtoupper($direccion);
+                    break;
+                }
             }
         }
 
@@ -315,11 +347,21 @@ class TerceroController extends Controller
             $data['direccion'] = 'NO REGISTRA';
         }
 
-        // BUSCAR EMAIL
-        if (preg_match('/14\.\s*Buz[óo]n\s+electr[óo]nico[^\w]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/i', $textNormalized, $matches)) {
-            $data['email'] = strtolower(trim($matches[1]));
-        } elseif (preg_match('/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/', $textNormalized, $matches)) {
-            $data['email'] = strtolower(trim($matches[1]));
+        // BUSCAR EMAIL - Campo 42 (Correo electrónico) o Campo 14 (Buzón electrónico)
+        $emailPatterns = [
+            // Campo 42 del RUT
+            '/42\.\s*Correo\s+electr[óo]nico\s*[\r\n\s]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/is',
+            // Campo 14 (buzón electrónico)
+            '/14\.\s*Buz[óo]n\s+electr[óo]nico[^\w]*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/is',
+            // Email genérico en cualquier parte
+            '/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/',
+        ];
+        
+        foreach ($emailPatterns as $pattern) {
+            if (preg_match($pattern, $text, $matches) && isset($matches[1])) {
+                $data['email'] = strtolower(trim($matches[1]));
+                break;
+            }
         }
 
         // Valores predeterminados

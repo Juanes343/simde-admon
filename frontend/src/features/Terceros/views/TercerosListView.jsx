@@ -1,6 +1,22 @@
 import React from 'react';
 import { Table, Button, Badge, Spinner } from 'react-bootstrap';
 
+// Mapeo de tipos de identificación
+const getTipoIdentificacion = (codigo) => {
+  const tipos = {
+    '11': 'RC',           // Registro Civil
+    '12': 'TI',           // Tarjeta de Identidad
+    '13': 'CC',           // Cédula de Ciudadanía
+    '21': 'TE',           // Tarjeta de Extranjería
+    '22': 'CE',           // Cédula de Extranjería
+    '31': 'NIT',          // NIT
+    '41': 'Pasaporte',
+    '42': 'Documento Extranjero',
+    '43': 'PEP',          // Permiso Especial de Permanencia
+  };
+  return tipos[codigo] || codigo;
+};
+
 const TercerosListView = ({ terceros, loading, onEdit, onDelete }) => {
   if (loading) {
     return (
@@ -38,7 +54,7 @@ const TercerosListView = ({ terceros, loading, onEdit, onDelete }) => {
         <tbody>
           {terceros.map((tercero) => (
             <tr key={`${tercero.tipo_id_tercero}-${tercero.tercero_id}`}>
-              <td>{tercero.tipo_id_tercero}</td>
+              <td>{getTipoIdentificacion(tercero.tipo_id_tercero)}</td>
               <td>{tercero.tercero_id}</td>
               <td>{tercero.nombre_tercero}</td>
               <td>{tercero.email || '-'}</td>
