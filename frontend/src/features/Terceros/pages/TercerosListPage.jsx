@@ -35,6 +35,10 @@ const TercerosListPage = () => {
   return (
     <MainLayout>
       <Container fluid>
+        <Button variant="link" onClick={() => navigate('/dashboard')} className="p-0 mb-2">
+          <i className="fas fa-arrow-left me-2"></i>
+          Volver al Dashboard
+        </Button>
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2>Gestión de Terceros</h2>
           <div>

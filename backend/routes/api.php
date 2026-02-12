@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TerceroController;
+use App\Http\Controllers\ServicioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,4 +31,12 @@ Route::middleware('custom.auth')->group(function () {
     
     // Crear tercero desde PDF
     Route::post('/terceros/upload-pdf', [TerceroController::class, 'createFromPdf']);
+
+    // Servicios
+    Route::get('/servicios', [ServicioController::class, 'index']);
+    Route::post('/servicios', [ServicioController::class, 'store']);
+    Route::get('/servicios/activos', [ServicioController::class, 'activos']);
+    Route::get('/servicios/{id}', [ServicioController::class, 'show']);
+    Route::put('/servicios/{id}', [ServicioController::class, 'update']);
+    Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
 });

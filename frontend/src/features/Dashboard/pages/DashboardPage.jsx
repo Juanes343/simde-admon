@@ -52,6 +52,33 @@ const DashboardPage = () => {
           buttonColor: 'warning'
         }
       ]
+    },
+    {
+      id: 'servicios',
+      title: 'SERVICIOS',
+      icon: 'fa-cogs',
+      description: 'Parametriza y gestiona los servicios que ofrece tu empresa.',
+      color: '#2c5f2d',
+      subModules: [
+        {
+          id: 'list',
+          title: 'Consultar Servicios',
+          icon: 'fa-list',
+          description: 'Consulta y gestiona el listado de servicios.',
+          action: () => navigate('/servicios'),
+          buttonText: 'Ver Servicios',
+          buttonColor: 'primary'
+        },
+        {
+          id: 'new',
+          title: 'Nuevo Servicio',
+          icon: 'fa-plus-circle',
+          description: 'Crea un nuevo servicio con precio y tipo de unidad.',
+          action: () => navigate('/servicios/new'),
+          buttonText: 'Crear Servicio',
+          buttonColor: 'success'
+        }
+      ]
     }
   ];
 

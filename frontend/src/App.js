@@ -18,6 +18,10 @@ import TercerosListPage from './features/Terceros/pages/TercerosListPage';
 import TerceroFormPage from './features/Terceros/pages/TerceroFormPage';
 import TerceroUploadPdfPage from './features/Terceros/pages/TerceroUploadPdfPage';
 
+// Servicios
+import ServiciosListPage from './features/Servicios/pages/ServiciosListPage';
+import ServicioFormPage from './features/Servicios/pages/ServicioFormPage';
+
 // Components
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
 
@@ -84,6 +88,34 @@ function App() {
             element={
               <PrivateRoute>
                 <TerceroUploadPdfPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Rutas de Servicios */}
+          <Route
+            path="/servicios"
+            element={
+              <PrivateRoute>
+                <ServiciosListPage />
+              </PrivateRoute>
+            }
+          />
+          
+          <Route
+            path="/servicios/new"
+            element={
+              <PrivateRoute>
+                <ServicioFormPage />
+              </PrivateRoute>
+            }
+          />
+          
+          <Route
+            path="/servicios/edit/:id"
+            element={
+              <PrivateRoute>
+                <ServicioFormPage />
               </PrivateRoute>
             }
           />
