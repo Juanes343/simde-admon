@@ -1,0 +1,14 @@
+{
+    "$schema": "https://json.schemastore.org/package.json",
+    "name": "simde-admon-backend",
+    "version": "1.0.0",
+    "description": "SIMDE ADMON - Laravel API Backend",
+    "private": true,
+    "scripts": {
+        "serve": "php artisan serve",
+        "migrate": "php artisan migrate",
+        "migrate:fresh": "php artisan migrate:fresh",
+        "seed": "php artisan db:seed",
+        "test": "php artisan test"
+    }
+}
