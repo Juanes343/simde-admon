@@ -200,6 +200,19 @@ class TerceroController extends Controller
                 ], 401);
             }
 
+            // Verificar si el tercero ya existe
+            $exists = Tercero::where('tipo_id_tercero', $data['tipo_id_tercero'])
+                             ->where('tercero_id', $data['tercero_id'])
+                             ->first();
+
+            if ($exists) {
+                return response()->json([
+                    'message' => 'El tercero ya existe en el sistema',
+                    'tercero' => $exists,
+                    'info' => 'NIT: ' . $data['tercero_id'] . '-' . ($data['dv'] ?? '') . ' - ' . $data['nombre_tercero']
+                ], 409);
+            }
+
             // Crear el tercero con los datos extraídos
             $tercero = Tercero::create(array_merge(
                 $data,

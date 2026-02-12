@@ -1,12 +1,80 @@
+/* Tarjetas de módulos principales */
+.module-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.module-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25) !important;
+}
+
+.module-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+  pointer-events: none;
+}
+
+.module-card .card-body {
+  position: relative;
+  z-index: 1;
+}
+
+/* Tarjetas de sub-módulos */
+.submodule-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.submodule-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border-color: #667eea !important;
+}
+
+.submodule-card .icon-wrapper {
+  transition: transform 0.3s ease;
+}
+
+.submodule-card:hover .icon-wrapper {
+  transform: scale(1.1) rotate(5deg);
+}
+
+/* Tarjeta de información */
+.info-card {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.info-card .card-header {
+  border-radius: 12px 12px 0 0 !important;
+}
+
+/* Estilos para el dashboard antiguo (compatibilidad) */
 .dashboard-card {
   cursor: pointer;
   transition: all 0.3s ease;
   height: 100%;
+  border-radius: 12px;
+  border: 2px solid #e0e0e0;
 }
 
 .dashboard-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  border-color: #667eea;
 }
 
 .dashboard-card .card-title {
@@ -19,4 +87,53 @@
 .dashboard-card i {
   font-size: 1.5rem;
   margin-right: 10px;
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.module-card,
+.submodule-card {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.module-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.module-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.module-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.submodule-card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+
+.submodule-card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.submodule-card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .module-card,
+  .submodule-card {
+    margin-bottom: 1rem;
+  }
 }
