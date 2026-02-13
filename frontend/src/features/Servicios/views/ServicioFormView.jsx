@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
+import { tipoUnidadServicioService } from '../../../services/tipoUnidadServicioService';
+import { toast } from 'react-toastify';
 
 const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
   const isEditMode = !!servicio;
+  const [tiposUnidad, setTiposUnidad] = useState([]);
+  const [loadingTiposUnidad, setLoadingTiposUnidad] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre_servicio: '',
@@ -25,6 +29,25 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
       });
     }
   }, [servicio]);
+
+  useEffect(() => {
+    const fetchTiposUnidad = async () => {
+      try {
+        setLoadingTiposUnidad(true);
+        const response = await tipoUnidadServicioService.getAll();
+        if (response.success) {
+          setTiposUnidad(response.data);
+        }
+      } catch (error) {
+        console.error('Error al cargar tipos de unidad:', error);
+        toast.error('Error al cargar tipos de unidad');
+      } finally {
+        setLoadingTiposUnidad(false);
+      }
+    };
+
+    fetchTiposUnidad();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -107,9 +130,14 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
                   value={formData.tipo_unidad}
                   onChange={handleChange}
                   required
+                  disabled={loadingTiposUnidad}
                 >
-                  <option value="UNIDAD">UNIDAD</option>
-                  <option value="HORAS">HORAS</option>
+                  <option value="">Seleccione...</option>
+                  {tiposUnidad.map((tipo) => (
+                    <option key={tipo.codigo} value={tipo.codigo}>
+                      {tipo.descripcion}
+                    </option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Col>

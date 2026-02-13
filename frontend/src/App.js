@@ -22,6 +22,11 @@ import TerceroUploadPdfPage from './features/Terceros/pages/TerceroUploadPdfPage
 import ServiciosListPage from './features/Servicios/pages/ServiciosListPage';
 import ServicioFormPage from './features/Servicios/pages/ServicioFormPage';
 
+// Órdenes de Servicio
+import OrdenesServicioListPage from './features/OrdenesServicio/pages/OrdenesServicioListPage';
+import OrdenServicioFormPage from './features/OrdenesServicio/pages/OrdenServicioFormPage';
+import OrdenServicioDetailPage from './features/OrdenesServicio/pages/OrdenServicioDetailPage';
+
 // Components
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
 
@@ -116,6 +121,43 @@ function App() {
             element={
               <PrivateRoute>
                 <ServicioFormPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Rutas de Órdenes de Servicio */}
+          <Route
+            path="/ordenes-servicio"
+            element={
+              <PrivateRoute>
+                <OrdenesServicioListPage />
+              </PrivateRoute>
+            }
+          />
+          
+          <Route
+            path="/ordenes-servicio/new"
+            element={
+              <PrivateRoute>
+                <OrdenServicioFormPage />
+              </PrivateRoute>
+            }
+          />
+          
+          <Route
+            path="/ordenes-servicio/edit/:id"
+            element={
+              <PrivateRoute>
+                <OrdenServicioFormPage />
+              </PrivateRoute>
+            }
+          />
+          
+          <Route
+            path="/ordenes-servicio/:id"
+            element={
+              <PrivateRoute>
+                <OrdenServicioDetailPage />
               </PrivateRoute>
             }
           />

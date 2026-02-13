@@ -79,6 +79,33 @@ const DashboardPage = () => {
           buttonColor: 'success'
         }
       ]
+    },
+    {
+      id: 'ordenes',
+      title: 'ÓRDENES DE SERVICIO',
+      icon: 'fa-file-contract',
+      description: 'Gestiona las órdenes de servicio asociadas a terceros.',
+      color: '#8b4513',
+      subModules: [
+        {
+          id: 'list',
+          title: 'Consultar Órdenes',
+          icon: 'fa-list',
+          description: 'Consulta y gestiona el listado de órdenes de servicio.',
+          action: () => navigate('/ordenes-servicio'),
+          buttonText: 'Ver Órdenes',
+          buttonColor: 'primary'
+        },
+        {
+          id: 'new',
+          title: 'Nueva Orden',
+          icon: 'fa-plus-circle',
+          description: 'Crea una nueva orden de servicio con tercero y servicios.',
+          action: () => navigate('/ordenes-servicio/new'),
+          buttonText: 'Crear Orden',
+          buttonColor: 'success'
+        }
+      ]
     }
   ];
 
