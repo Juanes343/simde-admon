@@ -6,6 +6,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TerceroController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\TipoIdTerceroController;
+use App\Http\Controllers\TipoUnidadServicioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Tipos de Identificación (catálogo)
     Route::get('/tipos-id-tercero', [TipoIdTerceroController::class, 'index']);
+
+    // Tipos de Unidad (catálogo)
+    Route::get('/tipos-unidad-servicio', [TipoUnidadServicioController::class, 'index']);
 
     // Terceros
     Route::get('/terceros', [TerceroController::class, 'index']);
