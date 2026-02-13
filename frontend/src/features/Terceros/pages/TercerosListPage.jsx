@@ -7,11 +7,14 @@ import { terceroService } from '../services/terceroService';
 import TercerosListView from '../views/TercerosListView';
 import MainLayout from '../../../components/Layout/MainLayout';
 import BackToDashboard from '../../../components/BackToDashboard/BackToDashboard';
+import ConfirmModal from '../../../components/ConfirmModal';
 
 const TercerosListPage = () => {
   const navigate = useNavigate();
   const { terceros, loading, pagination, setPage, updateFilters, refetch } = useTerceros();
   const [search, setSearch] = React.useState('');
+  const [showConfirmModal, setShowConfirmModal] = React.useState(false);
+  const [terceroToDelete, setTerceroToDelete] = React.useState(null);
 
   const handleSearch = () => {
     updateFilters({ search });
@@ -21,15 +24,25 @@ const TercerosListPage = () => {
     navigate(`/terceros/edit/${tercero.tipo_id_tercero}/${tercero.tercero_id}`);
   };
 
-  const handleDelete = async (tercero) => {
-    if (window.confirm('¿Está seguro de desactivar este tercero?')) {
-      try {
-        await terceroService.delete(tercero.tipo_id_tercero, tercero.tercero_id);
-        toast.success('Tercero desactivado exitosamente');
-        refetch();
-      } catch (error) {
-        toast.error('Error al desactivar tercero');
-      }
+  const handleDelete = (tercero) => {
+    setTerceroToDelete(tercero);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!terceroToDelete) return;
+    
+    const isActive = terceroToDelete.sw_estado === '1';
+    const action = isActive ? 'desactivado' : 'activado';
+    
+    try {
+      await terceroService.delete(terceroToDelete.tipo_id_tercero, terceroToDelete.tercero_id);
+      toast.success(`Tercero ${action} exitosamente`);
+      refetch();
+    } catch (error) {
+      toast.error(`Error al ${isActive ? 'desactivar' : 'activar'} tercero`);
+    } finally {
+      setTerceroToDelete(null);
     }
   };
 
@@ -92,6 +105,27 @@ const TercerosListPage = () => {
             Siguiente
           </Button>
         </div>
+
+        <ConfirmModal
+          show={showConfirmModal}
+          onHide={() => {
+            setShowConfirmModal(false);
+            setTerceroToDelete(null);
+          }}
+          onConfirm={confirmDelete}
+          title={terceroToDelete?.sw_estado === '1' ? 'Desactivar Tercero' : 'Activar Tercero'}
+          message={
+            terceroToDelete 
+              ? terceroToDelete.sw_estado === '1'
+                ? `¿Está seguro de desactivar el tercero "${terceroToDelete.nombre_tercero}"?`
+                : `¿Está seguro de activar el tercero "${terceroToDelete.nombre_tercero}"?`
+              : '¿Está seguro de realizar esta acción?'
+          }
+          confirmText={terceroToDelete?.sw_estado === '1' ? 'Desactivar' : 'Activar'}
+          cancelText="Cancelar"
+          confirmVariant={terceroToDelete?.sw_estado === '1' ? 'danger' : 'success'}
+          icon={terceroToDelete?.sw_estado === '1' ? 'fa-exclamation-triangle' : 'fa-check-circle'}
+        />
       </Container>
     </MainLayout>
   );

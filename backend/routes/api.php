@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\TerceroController;
 use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\TipoIdTerceroController;
 
 /*
 |--------------------------------------------------------------------------
@@ -21,6 +22,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Tipos de Identificación (catálogo)
+    Route::get('/tipos-id-tercero', [TipoIdTerceroController::class, 'index']);
 
     // Terceros
     Route::get('/terceros', [TerceroController::class, 'index']);

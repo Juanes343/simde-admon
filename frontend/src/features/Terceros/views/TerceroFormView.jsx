@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
+import { tipoIdTerceroService } from '../../../services/tipoIdTerceroService';
+import { toast } from 'react-toastify';
 
 const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
   const isEditMode = !!tercero;
+  const [tiposId, setTiposId] = useState([]);
+  const [loadingTiposId, setLoadingTiposId] = useState(true);
 
   const [formData, setFormData] = useState({
     tipo_id_tercero: '',
@@ -42,6 +46,25 @@ const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
     }
   }, [tercero]);
 
+  useEffect(() => {
+    const fetchTiposId = async () => {
+      try {
+        setLoadingTiposId(true);
+        const response = await tipoIdTerceroService.getAll();
+        if (response.success) {
+          setTiposId(response.data);
+        }
+      } catch (error) {
+        console.error('Error al cargar tipos de identificación:', error);
+        toast.error('Error al cargar tipos de identificación');
+      } finally {
+        setLoadingTiposId(false);
+      }
+    };
+
+    fetchTiposId();
+  }, []);
+
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     setFormData({
@@ -69,13 +92,14 @@ const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
                   value={formData.tipo_id_tercero}
                   onChange={handleChange}
                   required
-                  disabled={isEditMode}
+                  disabled={isEditMode || loadingTiposId}
                 >
                   <option value="">Seleccione...</option>
-                  <option value="13">CC - Cédula Ciudadanía</option>
-                  <option value="31">NIT</option>
-                  <option value="22">CE - Cédula Extranjería</option>
-                  <option value="41">Pasaporte</option>
+                  {tiposId.map((tipo) => (
+                    <option key={tipo.tipo_id_tercero} value={tipo.tipo_id_tercero}>
+                      {tipo.tipo_id_tercero} - {tipo.descripcion}
+                    </option>
+                  ))}
                 </Form.Select>
               </Form.Group>
             </Col>

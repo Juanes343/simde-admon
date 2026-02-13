@@ -130,7 +130,7 @@ class TerceroController extends Controller
     }
 
     /**
-     * Remove the specified tercero (soft delete)
+     * Toggle estado del tercero (activar/desactivar)
      */
     public function destroy($tipo_id_tercero, $tercero_id)
     {
@@ -142,10 +142,15 @@ class TerceroController extends Controller
             return response()->json(['message' => 'Tercero no encontrado'], 404);
         }
 
-        $tercero->update(['sw_estado' => '0']);
+        // Toggle estado: si está activo lo desactiva, si está inactivo lo activa
+        $nuevoEstado = $tercero->sw_estado === '1' ? '0' : '1';
+        $tercero->update(['sw_estado' => $nuevoEstado]);
+
+        $mensaje = $nuevoEstado === '1' ? 'Tercero activado exitosamente' : 'Tercero desactivado exitosamente';
 
         return response()->json([
-            'message' => 'Tercero desactivado exitosamente'
+            'message' => $mensaje,
+            'estado' => $nuevoEstado
         ]);
     }
 
@@ -262,7 +267,7 @@ class TerceroController extends Controller
                 // Verificar que no sea el número de formulario (campo 4) que aparece antes
                 if (strlen($nit) >= 9 && $nit !== '1411871119') { // Excluir número de formulario conocido
                     $data['tercero_id'] = $nit;
-                    $data['tipo_id_tercero'] = '31'; // NIT
+                    $data['tipo_id_tercero'] = 'NIT'; // Usar código 'NIT' de la tabla tipo_id_terceros
                     
                     // Buscar DV: puede estar en diferentes formatos
                     // 1. Buscar después del NIT

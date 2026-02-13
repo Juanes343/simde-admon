@@ -141,7 +141,7 @@ class ServicioController extends Controller
     }
 
     /**
-     * Remove the specified servicio (soft delete)
+     * Toggle estado del servicio (activar/desactivar)
      */
     public function destroy($id)
     {
@@ -151,10 +151,15 @@ class ServicioController extends Controller
             return response()->json(['message' => 'Servicio no encontrado'], 404);
         }
 
-        $servicio->update(['sw_estado' => '0']);
+        // Toggle estado: si está activo lo desactiva, si está inactivo lo activa
+        $nuevoEstado = $servicio->sw_estado === '1' ? '0' : '1';
+        $servicio->update(['sw_estado' => $nuevoEstado]);
+
+        $mensaje = $nuevoEstado === '1' ? 'Servicio activado exitosamente' : 'Servicio desactivado exitosamente';
 
         return response()->json([
-            'message' => 'Servicio desactivado exitosamente'
+            'message' => $mensaje,
+            'estado' => $nuevoEstado
         ]);
     }
 

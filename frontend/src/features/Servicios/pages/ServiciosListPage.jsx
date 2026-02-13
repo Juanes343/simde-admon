@@ -6,6 +6,7 @@ import ServiciosListView from '../views/ServiciosListView';
 import servicioService from '../services/servicioService';
 import MainLayout from '../../../components/Layout/MainLayout';
 import BackToDashboard from '../../../components/BackToDashboard/BackToDashboard';
+import ConfirmModal from '../../../components/ConfirmModal';
 
 const ServiciosListPage = () => {
   const navigate = useNavigate();
@@ -14,6 +15,8 @@ const ServiciosListPage = () => {
   const [buscar, setBuscar] = useState('');
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroTipoUnidad, setFiltroTipoUnidad] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [servicioToDelete, setServicioToDelete] = useState(null);
 
   useEffect(() => {
     loadServicios();
@@ -67,16 +70,26 @@ const ServiciosListPage = () => {
     navigate(`/servicios/edit/${servicio.servicio_id}`);
   };
 
-  const handleDelete = async (servicio) => {
-    if (window.confirm(`¿Está seguro de desactivar el servicio "${servicio.nombre_servicio}"?`)) {
-      try {
-        await servicioService.delete(servicio.servicio_id);
-        toast.success('Servicio desactivado exitosamente');
-        loadServicios();
-      } catch (error) {
-        toast.error('Error al desactivar el servicio');
-        console.error('Error:', error);
-      }
+  const handleDelete = (servicio) => {
+    setServicioToDelete(servicio);
+    setShowConfirmModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!servicioToDelete) return;
+    
+    const isActive = servicioToDelete.sw_estado === '1';
+    const action = isActive ? 'desactivado' : 'activado';
+    
+    try {
+      await servicioService.delete(servicioToDelete.servicio_id);
+      toast.success(`Servicio ${action} exitosamente`);
+      loadServicios();
+    } catch (error) {
+      toast.error(`Error al ${isActive ? 'desactivar' : 'activar'} el servicio`);
+      console.error('Error:', error);
+    } finally {
+      setServicioToDelete(null);
     }
   };
 
@@ -160,6 +173,27 @@ const ServiciosListPage = () => {
           />
         </Col>
       </Row>
+
+      <ConfirmModal
+        show={showConfirmModal}
+        onHide={() => {
+          setShowConfirmModal(false);
+          setServicioToDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        title={servicioToDelete?.sw_estado === '1' ? 'Desactivar Servicio' : 'Activar Servicio'}
+        message={
+          servicioToDelete 
+            ? servicioToDelete.sw_estado === '1'
+              ? `¿Está seguro de desactivar el servicio "${servicioToDelete.nombre_servicio}"?`
+              : `¿Está seguro de activar el servicio "${servicioToDelete.nombre_servicio}"?`
+            : '¿Está seguro de realizar esta acción?'
+        }
+        confirmText={servicioToDelete?.sw_estado === '1' ? 'Desactivar' : 'Activar'}
+        cancelText="Cancelar"
+        confirmVariant={servicioToDelete?.sw_estado === '1' ? 'danger' : 'success'}
+        icon={servicioToDelete?.sw_estado === '1' ? 'fa-exclamation-triangle' : 'fa-check-circle'}
+      />
     </Container>
     </MainLayout>
   );

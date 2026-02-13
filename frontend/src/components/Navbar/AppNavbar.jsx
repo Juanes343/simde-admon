@@ -34,6 +34,7 @@ const AppNavbar = () => {
           <Nav className="me-auto">
             <Nav.Link onClick={() => navigate('/dashboard')}>Dashboard</Nav.Link>
             <Nav.Link onClick={() => navigate('/terceros')}>Terceros</Nav.Link>
+            <Nav.Link onClick={() => navigate('/servicios')}>Servicios</Nav.Link>
           </Nav>
           <Nav>
             <Navbar.Text className="me-3">
