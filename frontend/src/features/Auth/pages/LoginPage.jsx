@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Container } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import LoginView from '../views/LoginView';
 import { authService } from '../services/authService';
@@ -32,22 +31,20 @@ const LoginPage = () => {
 
   return (
     <div className="auth-container">
-      <Container>
-        <div className="auth-card">
-          <div className="auth-header">
-            <h1>SIMDE ADMON</h1>
-            <p>Sistema Integral de Gestión</p>
-          </div>
-
-          <LoginView onSubmit={handleSubmit} loading={loading} error={error} />
-
-          <div className="text-center mt-3">
-            <Link to="/register" className="text-decoration-none">
-              ¿No tienes cuenta? Regístrate
-            </Link>
-          </div>
+      <div className="auth-card">
+        <div className="auth-header">
+          <h1>SIMDE ADMON</h1>
+          <p>Sistema Integral de Gestión</p>
         </div>
-      </Container>
+
+        <LoginView onSubmit={handleSubmit} loading={loading} error={error} />
+
+        <div className="text-center mt-3">
+          <Link to="/register" className="text-decoration-none">
+            ¿No tienes cuenta? Regístrate
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };

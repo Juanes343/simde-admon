@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Container } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import RegisterView from '../views/RegisterView';
 import { authService } from '../services/authService';
@@ -44,22 +43,20 @@ const RegisterPage = () => {
 
   return (
     <div className="auth-container">
-      <Container>
-        <div className="auth-card" style={{ maxWidth: '700px' }}>
-          <div className="auth-header">
-            <h1>SIMDE ADMON</h1>
-            <p>Registro de Nueva Cuenta</p>
-          </div>
-
-          <RegisterView onSubmit={handleSubmit} loading={loading} error={error} />
-
-          <div className="text-center mt-3">
-            <Link to="/login" className="text-decoration-none">
-              ¿Ya tienes cuenta? Inicia sesión
-            </Link>
-          </div>
+      <div className="auth-card" style={{ maxWidth: '700px' }}>
+        <div className="auth-header">
+          <h1>SIMDE ADMON</h1>
+          <p>Registro de Nueva Cuenta</p>
         </div>
-      </Container>
+
+        <RegisterView onSubmit={handleSubmit} loading={loading} error={error} />
+
+        <div className="text-center mt-3">
+          <Link to="/login" className="text-decoration-none">
+            ¿Ya tienes cuenta? Inicia sesión
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };

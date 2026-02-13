@@ -27,7 +27,7 @@ const LoginView = ({ onSubmit, loading, error }) => {
         <Form.Label>Usuario</Form.Label>
         <InputGroup>
           <InputGroup.Text style={{ background: 'white', border: '2px solid #e9ecef', borderRight: 'none' }}>
-            <i className="fas fa-user" style={{ color: '#667eea' }}></i>
+            <i className="fas fa-user" style={{ color: '#00b4d8' }}></i>
           </InputGroup.Text>
           <Form.Control
             type="text"
@@ -45,7 +45,7 @@ const LoginView = ({ onSubmit, loading, error }) => {
         <Form.Label>Contraseña</Form.Label>
         <InputGroup>
           <InputGroup.Text style={{ background: 'white', border: '2px solid #e9ecef', borderRight: 'none' }}>
-            <i className="fas fa-lock" style={{ color: '#667eea' }}></i>
+            <i className="fas fa-lock" style={{ color: '#00b4d8' }}></i>
           </InputGroup.Text>
           <Form.Control
             type="password"

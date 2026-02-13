@@ -1,12 +1,21 @@
 .auth-container {
   min-height: 100vh;
+  height: 100vh;
+  width: 100vw;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0F2027 0%, #203A43 50%, #2C5364 100%);
   background-attachment: fixed;
   padding: 20px;
-  position: relative;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .auth-container::before {
@@ -16,8 +25,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
-  opacity: 0.3;
+  background: url('data:image/svg+xml,<svg width="100" height="100" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+  opacity: 0.4;
 }
 
 .auth-card {
@@ -30,6 +39,7 @@
   position: relative;
   z-index: 1;
   animation: slideInUp 0.5s ease-out;
+  margin: 0 auto;
 }
 
 @keyframes slideInUp {
@@ -49,7 +59,7 @@
 }
 
 .auth-header h1 {
-  color: #667eea;
+  color: #00b4d8;
   font-size: 32px;
   margin-bottom: 8px;
   font-weight: 800;
@@ -81,8 +91,8 @@
 }
 
 .auth-card .form-control:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+  border-color: #00b4d8;
+  box-shadow: 0 0 0 0.2rem rgba(0, 180, 216, 0.15);
 }
 
 .auth-card .btn-primary {
@@ -90,7 +100,7 @@
   font-size: 16px;
   font-weight: 600;
   border-radius: 10px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0096c7 0%, #00b4d8 100%);
   border: none;
   transition: all 0.3s ease;
   margin-top: 10px;
@@ -98,7 +108,7 @@
 
 .auth-card .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 25px rgba(0, 180, 216, 0.4);
 }
 
 .auth-card .btn-primary:active:not(:disabled) {
@@ -111,13 +121,13 @@
 }
 
 .auth-card a {
-  color: #667eea;
+  color: #00b4d8;
   font-weight: 600;
   transition: all 0.3s ease;
 }
 
 .auth-card a:hover {
-  color: #764ba2;
+  color: #0096c7;
   text-decoration: underline !important;
 }
 
