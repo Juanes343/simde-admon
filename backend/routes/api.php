@@ -7,6 +7,7 @@ use App\Http\Controllers\TerceroController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\TipoIdTerceroController;
 use App\Http\Controllers\TipoUnidadServicioController;
+use App\Http\Controllers\OrdenServicioController;
 
 /*
 |--------------------------------------------------------------------------
@@ -47,4 +48,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/servicios/{id}', [ServicioController::class, 'show']);
     Route::put('/servicios/{id}', [ServicioController::class, 'update']);
     Route::delete('/servicios/{id}', [ServicioController::class, 'destroy']);
+
+    // Órdenes de Servicio
+    Route::get('/ordenes-servicio', [OrdenServicioController::class, 'index']);
+    Route::post('/ordenes-servicio', [OrdenServicioController::class, 'store']);
+    Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
+    Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
+    Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
 });
