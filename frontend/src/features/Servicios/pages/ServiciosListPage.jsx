@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import ServiciosListView from '../views/ServiciosListView';
 import servicioService from '../services/servicioService';
 import MainLayout from '../../../components/Layout/MainLayout';
+import BackToDashboard from '../../../components/BackToDashboard/BackToDashboard';
 
 const ServiciosListPage = () => {
   const navigate = useNavigate();
@@ -82,12 +83,9 @@ const ServiciosListPage = () => {
   return (
     <MainLayout>
       <Container fluid className="py-4">
+        <BackToDashboard />
         <Row className="mb-4">
           <Col>
-            <Button variant="link" onClick={() => navigate('/dashboard')} className="p-0 mb-2">
-              <i className="fas fa-arrow-left me-2"></i>
-              Volver al Dashboard
-            </Button>
             <h2>Gestión de Servicios</h2>
           </Col>
           <Col className="text-end">

@@ -1,11 +1,12 @@
 import React from 'react';
 import AppNavbar from '../Navbar/AppNavbar';
+import './MainLayout.css';
 
 const MainLayout = ({ children }) => {
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+    <div className="main-layout">
       <AppNavbar />
-      <div>{children}</div>
+      <div className="main-content">{children}</div>
     </div>
   );
 };

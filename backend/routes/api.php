@@ -16,8 +16,8 @@ use App\Http\Controllers\ServicioController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
-// Rutas protegidas
-Route::middleware('custom.auth')->group(function () {
+// Rutas protegidas con Sanctum
+Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);

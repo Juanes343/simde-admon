@@ -124,28 +124,6 @@ const DashboardPage = () => {
           </Col>
         ))}
       </Row>
-
-      <Row className="mt-5">
-        <Col>
-          <Card className="info-card">
-            <Card.Header className="bg-dark text-white">
-              <h5 className="mb-0">Información del Sistema</h5>
-            </Card.Header>
-            <Card.Body>
-              <Row>
-                <Col md={6}>
-                  <p className="mb-2"><strong>Fecha:</strong> {new Date().toLocaleDateString('es-CO')}</p>
-                  <p className="mb-2"><strong>Hora:</strong> {new Date().toLocaleTimeString('es-CO')}</p>
-                </Col>
-                <Col md={6}>
-                  <p className="mb-2"><strong>Usuario Activo:</strong> {user?.usuario}</p>
-                  <p className="mb-2"><strong>Email:</strong> {user?.email}</p>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
     </>
   );
 

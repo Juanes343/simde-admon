@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Button } from 'react-bootstrap';
+import { Container, Button } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import ServicioFormView from '../views/ServicioFormView';
 import servicioService from '../services/servicioService';
+import MainLayout from '../../../components/Layout/MainLayout';
 
 const ServicioFormPage = () => {
   const navigate = useNavigate();
@@ -58,27 +59,23 @@ const ServicioFormPage = () => {
   };
 
   return (
-    <Container fluid className="py-4">
-      <Row className="mb-4">
-        <Col>
-          <Button variant="link" onClick={() => navigate('/servicios')} className="p-0">
-            <i className="fas fa-arrow-left me-2"></i>
-            Volver a Servicios
+    <MainLayout>
+      <Container>
+        <div className="d-flex justify-content-between align-items-center mb-4">
+          <h2>{isEditMode ? 'Editar Servicio' : 'Nuevo Servicio'}</h2>
+          <Button variant="secondary" onClick={handleCancel}>
+            <i className="fas fa-arrow-left me-2"></i> Volver
           </Button>
-        </Col>
-      </Row>
+        </div>
 
-      <Row>
-        <Col lg={8} className="mx-auto">
-          <ServicioFormView
-            servicio={servicio}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            loading={loading}
-          />
-        </Col>
-      </Row>
-    </Container>
+        <ServicioFormView
+          servicio={servicio}
+          onSubmit={handleSubmit}
+          onCancel={handleCancel}
+          loading={loading}
+        />
+      </Container>
+    </MainLayout>
   );
 };
 

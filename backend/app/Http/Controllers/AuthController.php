@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\SystemUsuario;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -24,8 +23,6 @@ class AuthController extends Controller
             'primer_apellido' => 'required|string|max:20',
         ]);
 
-        $token = Str::random(80);
-
         $usuario = SystemUsuario::create([
             'usuario' => $request->usuario,
             'nombre' => $request->nombre,
@@ -40,8 +37,10 @@ class AuthController extends Controller
             'tel_celular' => $request->tel_celular,
             'sw_admin' => '0',
             'activo' => '1',
-            'remember_token' => hash('sha256', $token),
         ]);
+
+        // Crear token con Sanctum
+        $token = $usuario->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'access_token' => $token,
@@ -74,9 +73,11 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = Str::random(80);
-        $usuario->remember_token = hash('sha256', $token);
-        $usuario->save();
+        // Revocar tokens anteriores
+        $usuario->tokens()->delete();
+
+        // Crear nuevo token con Sanctum
+        $token = $usuario->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'access_token' => $token,
@@ -90,11 +91,8 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
-        $user = $request->user();
-        if ($user) {
-            $user->remember_token = null;
-            $user->save();
-        }
+        // Revocar el token actual con Sanctum
+        $request->user()->currentAccessToken()->delete();
 
         return response()->json([
             'message' => 'Sesión cerrada exitosamente',

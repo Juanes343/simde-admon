@@ -6,6 +6,7 @@ import { useTerceros } from '../hooks/useTerceros';
 import { terceroService } from '../services/terceroService';
 import TercerosListView from '../views/TercerosListView';
 import MainLayout from '../../../components/Layout/MainLayout';
+import BackToDashboard from '../../../components/BackToDashboard/BackToDashboard';
 
 const TercerosListPage = () => {
   const navigate = useNavigate();
@@ -35,10 +36,7 @@ const TercerosListPage = () => {
   return (
     <MainLayout>
       <Container fluid>
-        <Button variant="link" onClick={() => navigate('/dashboard')} className="p-0 mb-2">
-          <i className="fas fa-arrow-left me-2"></i>
-          Volver al Dashboard
-        </Button>
+        <BackToDashboard />
         <div className="d-flex justify-content-between align-items-center mb-4">
           <h2>Gestión de Terceros</h2>
           <div>
