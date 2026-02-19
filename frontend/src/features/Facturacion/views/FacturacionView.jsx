@@ -1,0 +1,265 @@
+import React, { useState, useEffect } from 'react';
+import { Card, Table, Button, Form, Row, Col, Badge, Spinner, Alert } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
+import facturacionService from '../../../services/facturacionService';
+import { formatCurrency } from '../../../utils/formatters';
+import Swal from 'sweetalert2';
+
+const FacturacionView = () => {
+  const navigate = useNavigate();
+  const [prefijos, setPrefijos] = useState([]);
+  const [ordenes, setOrdenes] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [prefijoSelected, setPrefijoSelected] = useState('');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [filters, setFilters] = useState({
+    lapso_inicio: '',
+    lapso_fin: '',
+    tercero: ''
+  });
+
+  useEffect(() => {
+    loadPrefijos();
+  }, []);
+
+  // Buscador dinámico con debounce
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      loadPendientes();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [filters]);
+
+  const loadPrefijos = async () => {
+    try {
+      const data = await facturacionService.getPrefijos();
+      setPrefijos(data);
+      if (data.length > 0) setPrefijoSelected(data[0].documento_id);
+    } catch (error) {
+      console.error("Error cargando prefijos", error);
+    }
+  };
+
+  const loadPendientes = async () => {
+    setLoading(true);
+    try {
+      const data = await facturacionService.getPendientes(filters.lapso_inicio, filters.lapso_fin, filters.tercero);
+      setOrdenes(data);
+    } catch (error) {
+      Swal.fire('Error', 'No se pudieron cargar las órdenes pendientes', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAll = (orden) => {
+    const itemIds = orden.items.map(i => i.item_id);
+    const allSelected = itemIds.every(id => selectedItems.includes(id));
+
+    if (allSelected) {
+      setSelectedItems(selectedItems.filter(id => !itemIds.includes(id)));
+    } else {
+      setSelectedItems([...new Set([...selectedItems, ...itemIds])]);
+    }
+  };
+
+  const handleSelectItem = (itemId) => {
+    if (selectedItems.includes(itemId)) {
+      setSelectedItems(selectedItems.filter(id => id !== itemId));
+    } else {
+      setSelectedItems([...selectedItems, itemId]);
+    }
+  };
+
+  const handleFacturar = async () => {
+    if (!prefijoSelected) return Swal.fire('Atención', 'Seleccione un prefijo de facturación', 'warning');
+    if (selectedItems.length === 0) return Swal.fire('Atención', 'Seleccione al menos un ítem para facturar', 'warning');
+
+    const result = await Swal.fire({
+      title: '¿Generar Factura?',
+      text: `Se facturarán ${selectedItems.length} ítems.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, Facturar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        // Para este ejemplo tomamos el tercero de la primera orden seleccionada
+        // En un caso real, la lógica podría agrupar por tercero automáticamente
+        const firstItemId = selectedItems[0];
+        const targetOrden = ordenes.find(o => o.items.some(i => i.item_id === firstItemId));
+        
+        const payload = {
+          documento_id: prefijoSelected,
+          tercero_id: targetOrden.tercero_id,
+          tipo_id_tercero: targetOrden.tipo_id_tercero,
+          items: selectedItems.map(id => ({ item_id: id })),
+          observacion: "Facturación automática desde módulo de facturas."
+        };
+
+        const response = await facturacionService.generarFactura(payload);
+        Swal.fire('Éxito', response.message, 'success');
+        setSelectedItems([]);
+        loadPendientes();
+      } catch (error) {
+        Swal.fire('Error', error.response?.data?.message || 'Error al generar la factura', 'error');
+      }
+    }
+  };
+
+  return (
+    <div className="container-fluid py-4">
+      <Card className="shadow-sm mb-4">
+        <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Facturación de Órdenes Pendientes</h5>
+          <div>
+            <Button variant="light" size="sm" className="me-2" onClick={() => navigate('/facturas')}>
+              <i className="fas fa-list me-2"></i>Ver Histórico
+            </Button>
+            <Button variant="light" size="sm" onClick={() => navigate('/dashboard')}>
+              <i className="fas fa-arrow-left me-2"></i>Volver al Dashboard
+            </Button>
+          </div>
+        </Card.Header>
+        <Card.Body>
+          <Form className="mb-4">
+            <Row className="align-items-end">
+              <Col md={3}>
+                <Form.Group>
+                  <Form.Label>Lapso Inicio</Form.Label>
+                  <Form.Control 
+                    type="date" 
+                    value={filters.lapso_inicio}
+                    onChange={(e) => setFilters({...filters, lapso_inicio: e.target.value})}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={3}>
+                <Form.Group>
+                  <Form.Label>Lapso Fin</Form.Label>
+                  <Form.Control 
+                    type="date"
+                    value={filters.lapso_fin}
+                    onChange={(e) => setFilters({...filters, lapso_fin: e.target.value})}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={3}>
+                <Form.Group>
+                  <Form.Label>Filtrar por Tercero (Nombre o NIT)</Form.Label>
+                  <Form.Control 
+                    type="text"
+                    placeholder="Escriba nombre o documento..."
+                    value={filters.tercero}
+                    onChange={(e) => setFilters({...filters, tercero: e.target.value})}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={3}>
+                <Button variant="outline-primary" className="w-100" onClick={loadPendientes}>
+                  Filtrar Pendientes
+                </Button>
+              </Col>
+            </Row>
+            <hr />
+            <Row>
+              <Col md={12}>
+                <Form.Group>
+                  <Form.Label className="fw-bold text-primary">Prefijo Facturación Habilitado</Form.Label>
+                  <Form.Select 
+                    value={prefijoSelected} 
+                    onChange={(e) => setPrefijoSelected(e.target.value)}
+                  >
+                    <option value="">Seleccione prefijo...</option>
+                    {prefijos.map(p => (
+                      <option key={p.documento_id} value={p.documento_id}>
+                        {p.prefijo} - {p.descripcion} (Sig: {p.numeracion + 1})
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            </Row>
+          </Form>
+
+          {loading ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" variant="primary" />
+              <p className="mt-2">Buscando órdenes pendientes...</p>
+            </div>
+          ) : ordenes.length === 0 ? (
+            <Alert variant="info" className="text-center">No hay órdenes pendientes por facturar para este criterio.</Alert>
+          ) : (
+            <>
+              {ordenes.map(orden => (
+                <Card key={orden.orden_servicio_id} className="mb-4 border-primary">
+                  <Card.Header className="bg-dark text-white d-flex justify-content-between align-items-center py-2">
+                    <div>
+                      <Form.Check 
+                        type="checkbox"
+                        inline
+                        id={`check-orden-${orden.orden_servicio_id}`}
+                        label={<span className="text-white fw-bold">Orden: {orden.numero_orden}</span>}
+                        checked={orden.items.every(i => selectedItems.includes(i.item_id))}
+                        onChange={() => handleSelectAll(orden)}
+                      />
+                      <span className="ms-3 text-warning fw-bold border-start ps-3">
+                        TERCERO: {orden.tercero?.nombre_tercero}
+                      </span>
+                    </div>
+                    <Badge bg="info">Inicio: {orden.fecha_inicio}</Badge>
+                  </Card.Header>
+                  <Table size="sm" responsive className="mb-0 bg-white">
+                    <thead>
+                      <tr>
+                        <th width="40"></th>
+                        <th>Servicio</th>
+                        <th className="text-center">Cant.</th>
+                        <th className="text-end">Precio Unit.</th>
+                        <th className="text-end">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orden.items.map(item => (
+                        <tr key={item.item_id}>
+                          <td className="text-center">
+                            <Form.Check 
+                              type="checkbox"
+                              checked={selectedItems.includes(item.item_id)}
+                              onChange={() => handleSelectItem(item.item_id)}
+                            />
+                          </td>
+                          <td>{item.nombre_servicio}</td>
+                          <td className="text-center">{item.cantidad}</td>
+                          <td className="text-end text-success">{formatCurrency(item.precio_unitario)}</td>
+                          <td className="text-end fw-bold">{formatCurrency(item.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                </Card>
+              ))}
+
+              <div className="d-flex justify-content-end mt-4">
+                <Button 
+                  variant="success" 
+                  size="lg" 
+                  disabled={selectedItems.length === 0}
+                  onClick={handleFacturar}
+                >
+                  <i className="fas fa-file-invoice-dollar me-2"></i>
+                  GENERAR FACTURA ({selectedItems.length} ítems)
+                </Button>
+              </div>
+            </>
+          )}
+        </Card.Body>
+      </Card>
+    </div>
+  );
+};
+
+export default FacturacionView;

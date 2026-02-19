@@ -36,6 +36,7 @@ const AppNavbar = () => {
             <Nav.Link onClick={() => navigate('/terceros')}>Terceros</Nav.Link>
             <Nav.Link onClick={() => navigate('/servicios')}>Servicios</Nav.Link>
             <Nav.Link onClick={() => navigate('/ordenes-servicio')}>Órdenes de Servicio</Nav.Link>
+            <Nav.Link onClick={() => navigate('/facturacion')}>Facturación</Nav.Link>
           </Nav>
           <Nav>
             <Navbar.Text className="me-3">

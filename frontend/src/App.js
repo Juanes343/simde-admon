@@ -27,6 +27,10 @@ import OrdenesServicioListPage from './features/OrdenesServicio/pages/OrdenesSer
 import OrdenServicioFormPage from './features/OrdenesServicio/pages/OrdenServicioFormPage';
 import OrdenServicioDetailPage from './features/OrdenesServicio/pages/OrdenServicioDetailPage';
 
+// Facturacion
+import FacturacionView from './features/Facturacion/views/FacturacionView';
+import FacturasListView from './features/Facturacion/views/FacturasListView';
+
 // Components
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
 
@@ -152,7 +156,23 @@ function App() {
               </PrivateRoute>
             }
           />
-          
+          <Route
+            path="/facturacion"
+            element={
+              <PrivateRoute>
+                <FacturacionView />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/facturas"
+            element={
+              <PrivateRoute>
+                <FacturasListView />
+              </PrivateRoute>
+            }
+          />          
           <Route
             path="/ordenes-servicio/:id"
             element={

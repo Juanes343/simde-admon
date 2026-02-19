@@ -105,8 +105,33 @@ const DashboardPage = () => {
           buttonText: 'Crear Orden',
           buttonColor: 'success'
         }
-      ]
-    }
+      ]    },
+    {
+      id: 'facturacion',
+      title: 'FACTURACIÓN',
+      icon: 'fa-file-invoice-dollar',
+      description: 'Genera facturas a partir de órdenes de servicio pendientes.',
+      color: '#d35400',
+      subModules: [
+        {
+          id: 'generar',
+          title: 'Generar Factura',
+          icon: 'fa-plus-circle',
+          description: 'Selecciona órdenes pendientes y genera facturas.',
+          action: () => navigate('/facturacion'),
+          buttonText: 'Ir a Facturación',
+          buttonColor: 'success'
+        },
+        {
+          id: 'list',
+          title: 'Consultar Facturas',
+          icon: 'fa-list',
+          description: 'Consulta el historial de facturas generadas.',
+          action: () => navigate('/facturas'),
+          buttonText: 'Ver Histórico',
+          buttonColor: 'primary'
+        }
+      ]    }
   ];
 
   const renderModules = () => (
