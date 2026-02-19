@@ -31,16 +31,16 @@ const ServiciosListView = ({ servicios, loading, onEdit, onDelete }) => {
   return (
     <div className="table-responsive">
       <Table striped bordered hover>
-        <thead>
+        <thead className="table-header-custom">
           <tr>
             <th>ID</th>
             <th>Nombre del Servicio</th>
             <th>Descripción</th>
-            <th>Cantidad</th>
-            <th>Tipo Unidad</th>
-            <th>Precio Unitario</th>
-            <th>Estado</th>
-            <th>Acciones</th>
+            <th className="text-center">Cant.</th>
+            <th className="text-center">Unidad</th>
+            <th className="text-end">Precio Unit.</th>
+            <th className="text-center">Estado</th>
+            <th className="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -68,24 +68,27 @@ const ServiciosListView = ({ servicios, loading, onEdit, onDelete }) => {
               </td>
               <td className="text-center">
                 <Badge bg={servicio.sw_estado === '1' ? 'success' : 'danger'}>
+                  <i className={`fas fa-${servicio.sw_estado === '1' ? 'check' : 'times-circle'} me-1`}></i>
                   {servicio.sw_estado === '1' ? 'Activo' : 'Inactivo'}
                 </Badge>
               </td>
               <td className="text-center">
                 <Button
                   size="sm"
-                  variant="info"
+                  variant="outline-primary"
                   className="me-1"
                   onClick={() => onEdit(servicio)}
+                  title="Editar"
                 >
                   <i className="fas fa-edit"></i>
                 </Button>
                 <Button
                   size="sm"
-                  variant="danger"
+                  variant={servicio.sw_estado === '1' ? 'outline-danger' : 'outline-success'}
                   onClick={() => onDelete(servicio)}
+                  title={servicio.sw_estado === '1' ? 'Desactivar' : 'Activar'}
                 >
-                  <i className="fas fa-trash"></i>
+                  <i className={`fas fa-${servicio.sw_estado === '1' ? 'ban' : 'check'}`}></i>
                 </Button>
               </td>
             </tr>

@@ -39,7 +39,7 @@ const TercerosListView = ({ terceros, loading, onEdit, onDelete }) => {
   return (
     <div className="table-responsive">
       <Table striped bordered hover>
-        <thead>
+        <thead className="table-header-custom">
           <tr>
             <th>Tipo ID</th>
             <th>Identificación</th>
@@ -47,8 +47,8 @@ const TercerosListView = ({ terceros, loading, onEdit, onDelete }) => {
             <th>Email</th>
             <th>Teléfono</th>
             <th>Dirección</th>
-            <th>Estado</th>
-            <th>Acciones</th>
+            <th className="text-center">Estado</th>
+            <th className="text-center">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -60,26 +60,29 @@ const TercerosListView = ({ terceros, loading, onEdit, onDelete }) => {
               <td>{tercero.email || '-'}</td>
               <td>{tercero.telefono || '-'}</td>
               <td>{tercero.direccion}</td>
-              <td>
+              <td className="text-center">
                 <Badge bg={tercero.sw_estado === '1' ? 'success' : 'danger'}>
+                  <i className={`fas fa-${tercero.sw_estado === '1' ? 'check' : 'times-circle'} me-1`}></i>
                   {tercero.sw_estado === '1' ? 'Activo' : 'Inactivo'}
                 </Badge>
               </td>
-              <td>
+              <td className="text-center">
                 <Button
                   size="sm"
-                  variant="info"
+                  variant="outline-primary"
                   className="me-1"
                   onClick={() => onEdit(tercero)}
+                  title="Editar"
                 >
                   <i className="fas fa-edit"></i>
                 </Button>
                 <Button
                   size="sm"
-                  variant="danger"
+                  variant={tercero.sw_estado === '1' ? 'outline-danger' : 'outline-success'}
                   onClick={() => onDelete(tercero)}
+                  title={tercero.sw_estado === '1' ? 'Desactivar' : 'Activar'}
                 >
-                  <i className="fas fa-trash"></i>
+                  <i className={`fas fa-${tercero.sw_estado === '1' ? 'ban' : 'check'}`}></i>
                 </Button>
               </td>
             </tr>

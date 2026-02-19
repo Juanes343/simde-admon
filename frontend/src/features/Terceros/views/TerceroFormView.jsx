@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
 import { tipoIdTerceroService } from '../../../services/tipoIdTerceroService';
+import { ubicacionService } from '../../../services/ubicacionService';
 import { toast } from 'react-toastify';
 
 const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
@@ -8,10 +9,20 @@ const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
   const [tiposId, setTiposId] = useState([]);
   const [loadingTiposId, setLoadingTiposId] = useState(true);
 
+  // Estados para ubicación
+  const [paises, setPaises] = useState([]);
+  const [departamentos, setDepartamentos] = useState([]);
+  const [municipios, setMunicipios] = useState([]);
+  const [loadingUbicacion, setLoadingUbicacion] = useState({
+    paises: false,
+    departamentos: false,
+    municipios: false
+  });
+
   const [formData, setFormData] = useState({
     tipo_id_tercero: '',
     tercero_id: '',
-    tipo_pais_id: '169',
+    tipo_pais_id: '',
     tipo_dpto_id: '',
     tipo_mpio_id: '',
     direccion: '',
@@ -47,26 +58,93 @@ const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
   }, [tercero]);
 
   useEffect(() => {
-    const fetchTiposId = async () => {
+    const initForm = async () => {
+      // Cargar tipos ID
       try {
         setLoadingTiposId(true);
-        const response = await tipoIdTerceroService.getAll();
-        if (response.success) {
-          setTiposId(response.data);
-        }
-      } catch (error) {
-        console.error('Error al cargar tipos de identificación:', error);
-        toast.error('Error al cargar tipos de identificación');
+        const resId = await tipoIdTerceroService.getAll();
+        if (resId.success) setTiposId(resId.data);
+      } catch (err) {
+        console.error('Error al cargar tipos ID:', err);
       } finally {
         setLoadingTiposId(false);
       }
+
+      // Cargar Países
+      try {
+        setLoadingUbicacion(prev => ({ ...prev, paises: true }));
+        const resPais = await ubicacionService.getPaises();
+        if (resPais.success) setPaises(resPais.data);
+      } catch (err) {
+        console.error('Error al cargar países:', err);
+      } finally {
+        setLoadingUbicacion(prev => ({ ...prev, paises: false }));
+      }
     };
 
-    fetchTiposId();
+    initForm();
   }, []);
+
+  // Cargar departamentos cuando cambia país
+  useEffect(() => {
+    if (!formData.tipo_pais_id) {
+      setDepartamentos([]);
+      setMunicipios([]);
+      return;
+    }
+
+    const fetchDptos = async () => {
+      try {
+        setLoadingUbicacion(prev => ({ ...prev, departamentos: true }));
+        const res = await ubicacionService.getDepartamentos(formData.tipo_pais_id);
+        if (res.success) setDepartamentos(res.data);
+      } catch (err) {
+        console.error('Error al cargar dptos:', err);
+      } finally {
+        setLoadingUbicacion(prev => ({ ...prev, departamentos: false }));
+      }
+    };
+
+    fetchDptos();
+  }, [formData.tipo_pais_id]);
+
+  // Cargar municipios cuando cambia departamento
+  useEffect(() => {
+    if (!formData.tipo_pais_id || !formData.tipo_dpto_id) {
+      setMunicipios([]);
+      return;
+    }
+
+    const fetchMpios = async () => {
+      try {
+        setLoadingUbicacion(prev => ({ ...prev, municipios: true }));
+        const res = await ubicacionService.getMunicipios(formData.tipo_pais_id, formData.tipo_dpto_id);
+        if (res.success) setMunicipios(res.data);
+      } catch (err) {
+        console.error('Error al cargar municipios:', err);
+      } finally {
+        setLoadingUbicacion(prev => ({ ...prev, municipios: false }));
+      }
+    };
+
+    fetchMpios();
+  }, [formData.tipo_pais_id, formData.tipo_dpto_id]);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    
+    // Si cambia país, limpiar depto y municipio
+    if (name === 'tipo_pais_id') {
+      setFormData(prev => ({ ...prev, [name]: value, tipo_dpto_id: '', tipo_mpio_id: '' }));
+      return;
+    }
+
+    // Si cambia depto, limpiar municipio
+    if (name === 'tipo_dpto_id') {
+      setFormData(prev => ({ ...prev, [name]: value, tipo_mpio_id: '' }));
+      return;
+    }
+
     setFormData({
       ...formData,
       [name]: type === 'checkbox' ? (checked ? '1' : '0') : value,
@@ -204,40 +282,58 @@ const TerceroFormView = ({ tercero, onSubmit, onCancel, loading }) => {
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>País *</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Select
                   name="tipo_pais_id"
                   value={formData.tipo_pais_id}
                   onChange={handleChange}
                   required
-                  maxLength="4"
-                />
+                  disabled={loadingUbicacion.paises}
+                >
+                  <option value="">Seleccione país...</option>
+                  {paises.map(p => (
+                    <option key={p.tipo_pais_id} value={p.tipo_pais_id}>
+                      {p.pais}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Departamento *</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Select
                   name="tipo_dpto_id"
                   value={formData.tipo_dpto_id}
                   onChange={handleChange}
                   required
-                  maxLength="4"
-                />
+                  disabled={!formData.tipo_pais_id || loadingUbicacion.departamentos}
+                >
+                  <option value="">Seleccione dpto...</option>
+                  {departamentos.map(d => (
+                    <option key={d.tipo_dpto_id} value={d.tipo_dpto_id}>
+                      {d.departamento}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Municipio *</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Select
                   name="tipo_mpio_id"
                   value={formData.tipo_mpio_id}
                   onChange={handleChange}
                   required
-                  maxLength="4"
-                />
+                  disabled={!formData.tipo_dpto_id || loadingUbicacion.municipios}
+                >
+                  <option value="">Seleccione municipio...</option>
+                  {municipios.map(m => (
+                    <option key={m.tipo_mpio_id} value={m.tipo_mpio_id}>
+                      {m.municipio}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
           </Row>
