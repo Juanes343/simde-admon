@@ -8,12 +8,22 @@ use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\TipoIdTerceroController;
 use App\Http\Controllers\TipoUnidadServicioController;
 use App\Http\Controllers\OrdenServicioController;
+use App\Http\Controllers\UbicacionController;
 
 /*
 |--------------------------------------------------------------------------
 | API Routes
 |--------------------------------------------------------------------------
 */
+
+Route::get('/ping', function () {
+    return response()->json(['status' => 'ok', 'message' => 'API is running']);
+});
+
+// Catálogos ubicación (pueden ser públicos si se requieren en el registro)
+Route::get('/ubicacion/paises', [UbicacionController::class, 'getPaises']);
+Route::get('/ubicacion/departamentos/{paisId}', [UbicacionController::class, 'getDepartamentos']);
+Route::get('/ubicacion/municipios/{paisId}/{dptoId}', [UbicacionController::class, 'getMunicipios']);
 
 // Rutas públicas
 Route::post('/register', [AuthController::class, 'register']);

@@ -10,7 +10,7 @@ class Tercero extends Model
     use HasFactory;
 
     protected $table = 'terceros';
-    protected $primaryKey = ['tipo_id_tercero', 'tercero_id'];
+    protected $primaryKey = 'tercero_id';
     public $incrementing = false;
     protected $keyType = 'string';
 
@@ -71,6 +71,29 @@ class Tercero extends Model
     public function usuario()
     {
         return $this->belongsTo(SystemUsuario::class, 'usuario_id', 'usuario_id');
+    }
+
+    /**
+     * Relaciones de Ubicación
+     */
+    public function pais()
+    {
+        return $this->belongsTo(TipoPais::class, 'tipo_pais_id', 'tipo_pais_id');
+    }
+
+    public function departamento()
+    {
+        return $this->belongsTo(TipoDpto::class, 'tipo_dpto_id', 'tipo_dpto_id');
+    }
+
+    public function municipio()
+    {
+        return $this->belongsTo(TipoMpio::class, 'tipo_mpio_id', 'tipo_mpio_id');
+    }
+
+    public function tipoIdentificacion()
+    {
+        return $this->belongsTo(TipoIdTercero::class, 'tipo_id_tercero', 'tipo_id_tercero');
     }
 
     /**
