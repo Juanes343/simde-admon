@@ -1,6 +1,27 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const getBaseURL = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // Fallback para producción en subcarpeta
+  if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    // Si estamos en devel82els.simde.com.co/simde-admon/frontend/build/
+    // el backend está en devel82els.simde.com.co/simde-admon/backend/public/api
+    const pathParts = window.location.pathname.split('/');
+    // Buscamos 'simde-admon' en el path para construir la ruta del backend
+    const adminIndex = pathParts.indexOf('simde-admon');
+    if (adminIndex !== -1) {
+      const basePath = pathParts.slice(0, adminIndex + 1).join('/');
+      return `${window.location.protocol}//${window.location.host}${basePath}/backend/public/api`;
+    }
+  }
+
+  return 'http://localhost:8000/api';
+};
+
+const API_URL = getBaseURL();
 
 const api = axios.create({
   baseURL: API_URL,

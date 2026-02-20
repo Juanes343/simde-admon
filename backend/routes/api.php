@@ -9,6 +9,7 @@ use App\Http\Controllers\TipoIdTerceroController;
 use App\Http\Controllers\TipoUnidadServicioController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\UbicacionController;
+use App\Http\Controllers\FacturacionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +20,12 @@ use App\Http\Controllers\UbicacionController;
 Route::get('/ping', function () {
     return response()->json(['status' => 'ok', 'message' => 'API is running']);
 });
+
+// Facturación
+Route::get('/facturacion/prefijos', [FacturacionController::class, 'getPrefijos']);
+Route::get('/facturacion/pendientes', [FacturacionController::class, 'getPendientesFacturar']);
+Route::get('/facturacion/facturas', [FacturacionController::class, 'getFacturas']);
+Route::post('/facturacion/facturar', [FacturacionController::class, 'facturar']);
 
 // Catálogos ubicación (pueden ser públicos si se requieren en el registro)
 Route::get('/ubicacion/paises', [UbicacionController::class, 'getPaises']);
