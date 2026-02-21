@@ -243,77 +243,92 @@ class TerceroController extends Controller
     private function extractRutData($text)
     {
         $data = [];
+        $textNormalized = preg_replace('/\s+/', ' ', $text);
 
-        // BUSCAR NIT - Basado en log: "141163793131 8903005165"
-        // El RUT tiene el número de formulario (empieza por 14) y luego el NIT
-        $nitPatterns = [
-            '/(\d{9,10})\s*Impuestos\s+de\s+Cali/is',
-            '/NIT\D*(\d{9,10})/is',
-            '/5\.\s*N[úu]mero\s+de\s+Identificaci[óo]n\s+Tributaria\s*\(NIT\)\D*(\d{9,10})/is',
-            '/\b(\d{10})\b/is',
-            '/\b(\d{9})\b/is',
-        ];
-
-        foreach ($nitPatterns as $pattern) {
-            if (preg_match_all($pattern, $text, $matches)) {
-                foreach ($matches[1] as $match) {
-                    if (!str_starts_with($match, '1411') && $match !== '04112025') {
-                        $data['tercero_id'] = $match;
-                        $data['tipo_id_tercero'] = 'NIT'; 
-                        break 2;
-                    }
-                }
-            }
-        }
-
-        // BUSCAR RAZÓN SOCIAL - En el log: "CLINICA SAN FERNANDO S.A."
-        $razonSocialPatterns = [
-            '/Persona\s+jur[íi]dica[^\n]*\n\s*\n\s*\n\s*\n\s*\n\s*([A-ZÁÉÍÓÚÑ\s\.]{3,100}S\.A\.S?\.?)/is',
-            '/(CLINICA\s+SAN\s+FERNANDO\s+S\.A\.?)/is',
-            '/35\.\s*Raz[óo]n\s+social[\s\S]{0,100}?([A-ZÁÉÍÓÚÑ\s\.&]{3,100})/is',
-        ];
-
-        foreach ($razonSocialPatterns as $pattern) {
-            if (preg_match($pattern, $text, $matches)) {
-                $nombre = isset($matches[1]) ? $matches[1] : $matches[0];
-                $nombre = trim(preg_replace('/\s+/', ' ', $nombre));
-                if (strlen($nombre) > 5) {
-                    $data['nombre_tercero'] = strtoupper($nombre);
+        // 1. BUSCAR NIT
+        if (preg_match_all('/\b(\d{9,10})\b/', $text, $matches)) {
+            foreach ($matches[1] as $match) {
+                // Ignorar números de trámite (empiezan por 1411...) o fechas (2025, 2026, etc)
+                if (!str_starts_with($match, '1411') && $match !== '04112025' && !str_starts_with($match, '2026')) {
+                    $data['tercero_id'] = $match;
+                    $data['tipo_id_tercero'] = '31'; // NIT es 31 en el catálogo
                     break;
                 }
             }
         }
 
-        // DIRECCIÓN - En el log: "CL 5 38 48"
-        if (preg_match('/(CL|CR|AV|KR|CALLE|CARRERA)\s+\d+[^\n]*/i', $text, $matches)) {
-            $data['direccion'] = strtoupper(trim($matches[0]));
+        // 2. BUSCAR RAZÓN SOCIAL (Persona Jurídica) - Con soporte para UTF-8 y tildes
+        if (preg_match('/Persona\s+jur.*?(\d+)\s+(.*?)\s+COLOMBIA/iu', $textNormalized, $matches)) {
+            $nombreBloque = trim($matches[2]);
+            
+            // Buscar si contiene un sufijo legal (S.A.S, S.A., LTDA, etc)
+            if (preg_match('/([A-ZÁÉÍÓÚÑ0-9\s\.&]{3,100}?\s+(?:S\.A\.S\.?|S\.A\.?|LTDA\.?|INC\.?|S\.C\.S\.?|SUCURSAL))/iu', $nombreBloque, $nameMatches)) {
+                $nombre = strtoupper(trim($nameMatches[0]));
+            } else {
+                 $nombre = strtoupper(trim($nombreBloque));
+            }
+            
+            // Si el nombre se repite (ej: "EMPRESA S.A.S EMPRESA S.A.S"), tomamos la primera instancia
+            $palabras = explode(' ', $nombre);
+            if (count($palabras) >= 4) {
+                $mitad = floor(count($palabras) / 2);
+                $primeraMitad = implode(' ', array_slice($palabras, 0, $mitad));
+                $segundaMitad = implode(' ', array_slice($palabras, $mitad));
+                if (trim($primeraMitad) === trim($segundaMitad)) {
+                    $nombre = trim($primeraMitad);
+                }
+            }
+
+            $data['nombre_tercero'] = $nombre;
+            $data['sw_persona_juridica'] = '1';
+        } 
+        
+        // 3. BUSCAR NOMBRES (Si es natural y no se detectó jurídica)
+        if (empty($data['nombre_tercero'])) {
+            // Suelen aparecer 4 palabras en mayúscula seguidas antes de la dirección
+            if (preg_match('/([A-ZÑ\s]{3,30})\s+([A-ZÑ\s]{3,30})\s+([A-ZÑ\s]{3,30})\s+([A-ZÑ\s]{3,30})/u', $text, $matches)) {
+                // ... lógica para natural (opcional según requerimientos)
+            }
         }
 
-        // EMAIL
+        // 4. DIRECCIÓN
+        if (preg_match('/(CL|CR|AV|KR|CALLE|CARRERA|Diagonal|Transversal|DG|TV)\s+\d+[^\n]*/iu', $text, $matches)) {
+            $data['direccion'] = strtoupper(trim(preg_replace('/\s+/', ' ', $matches[0])));
+        }
+
+        // 5. EMAIL
         if (preg_match('/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/', $text, $matches)) {
             $data['email'] = strtolower(trim($matches[1]));
         }
 
-        // TELÉFONOS - En el log: "6024853722 3505408355"
-        if (preg_match('/(602\d{7})\s+(3\d{9})/', $text, $matches)) {
-            $data['telefono'] = $matches[1];
-            $data['celular'] = $matches[2];
+        // 6. TELÉFONOS/CELULAR
+        if (preg_match_all('/\b(3\d{9}|[6][0-9]\d{7})\b/', $text, $matches)) {
+            foreach ($matches[1] as $tel) {
+                if (str_starts_with($tel, '3')) {
+                    $data['celular'] = $tel;
+                } else if (!isset($data['telefono'])) {
+                    $data['telefono'] = $tel;
+                }
+            }
         }
 
-        // UBICACIÓN - En el log: "COLOMBIA 169 Valle del Cauca 76 Cali 001"
-        if (preg_match('/COLOMBIA\s+169\s*([a-zA-Z\s]+)\s*(\d{2})\s*([a-zA-Z\s]+)\s*(\d{3})/i', $text, $matches)) {
+        // 7. UBICACIÓN 
+        // Ejemplo: COLOMBIA 169 Valle del Cauca 76 Sevilla 736
+        if (preg_match('/COLOMBIA\s+169\s*([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+?)\s*(\d{2})\s*([a-zA-ZáéíóúñÁÉÍÓÚÑ\s]+?)\s*(\d{3,5})/iu', $textNormalized, $matches)) {
             $data['tipo_pais_id'] = 'CO';
             $data['tipo_dpto_id'] = $matches[2];
             $data['tipo_mpio_id'] = $matches[4];
         } else {
             $data['tipo_pais_id'] = 'CO';
-            $data['tipo_dpto_id'] = '76'; 
-            $data['tipo_mpio_id'] = '001';
         }
 
-        $data['sw_persona_juridica'] = '1';
         $data['sw_estado'] = '1';
 
-        return !empty($data['tercero_id']) && !empty($data['nombre_tercero']) ? $data : null;
+        // Validar campos obligatorios mínimos
+        if (empty($data['tercero_id']) || empty($data['nombre_tercero'])) {
+            return null;
+        }
+
+        return $data;
     }
 }
