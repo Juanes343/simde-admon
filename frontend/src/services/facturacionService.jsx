@@ -25,6 +25,11 @@ const facturacionService = {
       params: { ...params, page } 
     });
     return response.data;
+  },
+
+  enviarDataIco: async (facturaId) => {
+    const response = await api.post('/electronic-invoicing/send', { id: facturaId });
+    return response.data;
   }
 };
 

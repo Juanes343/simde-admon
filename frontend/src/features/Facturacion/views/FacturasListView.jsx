@@ -3,6 +3,7 @@ import { Card, Table, Button, Form, Row, Col, Badge, Spinner, Pagination } from 
 import { useNavigate } from 'react-router-dom';
 import facturacionService from '../../../services/facturacionService';
 import { formatCurrency } from '../../../utils/formatters';
+import Swal from 'sweetalert2';
 
 const FacturasListView = () => {
   const navigate = useNavigate();
@@ -33,6 +34,52 @@ const FacturasListView = () => {
       console.error("Error cargando facturas", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEnviarDataIco = async (factura) => {
+    const result = await Swal.fire({
+      title: '¿Enviar a DataIco?',
+      text: `Se enviará la factura ${factura.prefijo} ${factura.factura_fiscal} como facturación electrónica.`,
+      icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, Enviar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      setLoading(true);
+      try {
+        const response = await facturacionService.enviarDataIco(factura.factura_fiscal_id);
+        
+        // Si el backend retornó el modo debug/payload
+        if (response.debug) {
+            console.log("JSON PREVISUALIZACION:", response.payload);
+            Swal.fire({
+                title: 'PREVISUALIZACIÓN JSON (DEBUG)',
+                html: `<div class="text-start">
+                        <p><b>Endpoint:</b> /${response.endpoint_target}</p>
+                        <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 400px; overflow-y: auto;">${JSON.stringify(response.payload, null, 2)}</pre>
+                       </div>`,
+                icon: 'warning',
+                width: '800px'
+            });
+            return;
+        }
+
+        const cufe = response.data?.cufe || 'N/A';
+        Swal.fire({
+          title: 'Enviado con éxito',
+          html: `<p>Factura enviada a la DIAN satisfactoriamente.</p>
+                 <small className="text-muted">CUFE: ${cufe}</small>`,
+          icon: 'success'
+        });
+        loadFacturas(pagination.current_page);
+      } catch (error) {
+        Swal.fire('Error', error.response?.data?.error || 'No se pudo procesar la factura electrónica', 'error');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -115,14 +162,30 @@ const FacturasListView = () => {
                       </td>
                       <td className="text-end fw-bold">{formatCurrency(f.total_factura)}</td>
                       <td className="text-center">
-                        <Badge bg={f.estado === '1' ? 'success' : 'danger'}>
+                        <Badge bg={f.estado === '1' ? 'success' : 'danger'} className="me-1">
                           {f.estado === '1' ? 'Generada' : 'Anulada'}
                         </Badge>
+                        {f.cufe ? (
+                          <Badge bg="info" title={`CUFE: ${f.cufe}`}>DIAN: OK</Badge>
+                        ) : f.estado === '1' ? (
+                          <Badge bg="warning" text="dark">DIAN: PENDIENTE</Badge>
+                        ) : null}
                       </td>
                       <td className="text-center">
-                        <Button size="sm" variant="outline-primary" title="Ver Detalles">
+                        <Button size="sm" variant="outline-primary" title="Ver Detalles" className="me-1">
                           <i className="fas fa-eye"></i>
                         </Button>
+                        {f.estado === '1' && (
+                          <Button 
+                            size="sm" 
+                            variant="success" 
+                            title="Enviar a DataIco (DIAN)"
+                            onClick={() => handleEnviarDataIco(f)}
+                          >
+                            <i className="fas fa-paper-plane me-1"></i>
+                            DIAN
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))

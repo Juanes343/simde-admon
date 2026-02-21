@@ -78,35 +78,46 @@ class FacturacionController extends Controller
      */
     public function getFacturas(Request $request)
     {
-        $lapsoInicio = $request->query('lapso_inicio');
-        $lapsoFin = $request->query('lapso_fin');
-        $tercero = $request->query('tercero');
+        try {
+            $lapsoInicio = $request->query('lapso_inicio');
+            $lapsoFin = $request->query('lapso_fin');
+            $tercero = $request->query('tercero');
 
-        $query = FacFactura::with(['items.ordenServicioItem']);
+            $query = FacFactura::with(['items.ordenServicioItem']);
 
-        if ($lapsoInicio) {
-            $query->whereDate('fecha_registro', '>=', $lapsoInicio);
+            if ($lapsoInicio && !empty($lapsoInicio)) {
+                $query->whereDate('fecha_registro', '>=', $lapsoInicio);
+            }
+            if ($lapsoFin && !empty($lapsoFin)) {
+                $query->whereDate('fecha_registro', '<=', $lapsoFin);
+            }
+
+            if ($tercero && !empty($tercero)) {
+                $query->where(function($q) use ($tercero) {
+                    $q->where('tercero_id', 'like', "%$tercero%")
+                      ->orWhereExists(function ($sub) use ($tercero) {
+                          $sub->select(DB::raw(1))
+                              ->from('terceros')
+                              ->whereColumn('terceros.tercero_id', 'fac_facturas.tercero_id')
+                              ->whereColumn('terceros.tipo_id_tercero', 'fac_facturas.tipo_id_tercero')
+                              ->where('terceros.nombre_tercero', 'like', "%$tercero%");
+                      });
+                });
+            }
+
+            $facturas = $query->orderBy('fecha_registro', 'desc')->paginate(10);
+            
+            return response()->json($facturas);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error obteniendo facturas',
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
         }
-        if ($lapsoFin) {
-            $query->whereDate('fecha_registro', '<=', $lapsoFin);
-        }
-
-        if ($tercero) {
-            $query->where(function($q) use ($tercero) {
-                $q->where('tercero_id', 'like', "%$tercero%")
-                  ->orWhereExists(function ($sub) use ($tercero) {
-                      $sub->select(DB::raw(1))
-                          ->from('terceros')
-                          ->whereColumn('terceros.tercero_id', 'fac_facturas.tercero_id')
-                          ->whereColumn('terceros.tipo_id_tercero', 'fac_facturas.tipo_id_tercero')
-                          ->where('terceros.nombre_tercero', 'like', "%$tercero%");
-                  });
-            });
-        }
-
-        $facturas = $query->orderBy('fecha_registro', 'desc')->paginate(10);
-        
-        return response()->json($facturas);
     }
 
     /**

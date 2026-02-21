@@ -10,6 +10,7 @@ use App\Http\Controllers\TipoUnidadServicioController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\UbicacionController;
 use App\Http\Controllers\FacturacionController;
+use App\Http\Controllers\ElectronicInvoicingController;
 
 /*
 |--------------------------------------------------------------------------
@@ -20,6 +21,9 @@ use App\Http\Controllers\FacturacionController;
 Route::get('/ping', function () {
     return response()->json(['status' => 'ok', 'message' => 'API is running']);
 });
+
+// Facturación Electrónica (DataIco)
+Route::post('/electronic-invoicing/send', [ElectronicInvoicingController::class, 'sendInvoice']);
 
 // Facturación
 Route::get('/facturacion/prefijos', [FacturacionController::class, 'getPrefijos']);

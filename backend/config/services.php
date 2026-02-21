@@ -4,35 +4,57 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | DataIco Electronic Invoicing Configuration
+    |--------------------------------------------------------------------------
+    */
+
+    'dataico' => [
+        'base_url' => env('DATAICO_BASE_URL', 'https://api.dataico.com/direct/dataico_api/v2'),
+        'token' => env('DATAICO_TOKEN', '0a7c5d5e2003f8e957288231af3c4ef5'),
+        'account_id' => env('DATAICO_ACCOUNT_ID', '01808624-3175-8838-83d4-1db98f4da325'),
+        'env' => env('DATAICO_ENV', 'PRUEBAS'), // PRUEBAS o PRODUCTO
+        'send_dian' => env('DATAICO_SEND_DIAN', false),
+        'debug_mode' => env('DATAICO_DEBUG', true), // SI ESTA EN TRUE, NO ENVIA Y RETORNA EL JSON
+        
+        'prefixes' => [
+            'invoice' => env('DATAICO_PREFIX_INVOICE', 'FE'),
+            'credit_note' => env('DATAICO_PREFIX_NC', 'NCSET'),
+            'debit_note' => env('DATAICO_PREFIX_ND', 'NDSETT'),
+        ],
+        
+        'resolutions' => [
+            'invoice' => env('DATAICO_RESOLUTION_INVOICE', '18760000000001'),
+        ],
+
+        'nit_sender' => env('DATAICO_NIT_SENDER', '800230028'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
     |
     | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
+    | as Mailgun, Postmark, AWS and more. This file provides a sane default
     | location for this type of information, allowing packages to have
     | a conventional file to locate the various service credentials.
     |
     */
 
-    'postmark' => [
-        'key' => env('POSTMARK_API_KEY'),
+    'mailgun' => [
+        'domain' => env('MAILGUN_DOMAIN'),
+        'secret' => env('MAILGUN_SECRET'),
+        'endpoint' => env('MAILGUN_ENDPOINT', 'api.mailgun.net'),
     ],
 
-    'resend' => [
-        'key' => env('RESEND_API_KEY'),
+    'postmark' => [
+        'token' => env('POSTMARK_TOKEN'),
     ],
 
     'ses' => [
         'key' => env('AWS_ACCESS_KEY_ID'),
         'secret' => env('AWS_SECRET_ACCESS_KEY'),
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
-    ],
-
-    'slack' => [
-        'notifications' => [
-            'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
-            'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
-        ],
     ],
 
 ];
