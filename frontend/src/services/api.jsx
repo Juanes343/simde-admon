@@ -1,8 +1,8 @@
 import axios from 'axios';
 
 const getBaseURL = () => {
-  if (process.env.REACT_APP_API_URL) {
-    return process.env.REACT_APP_API_URL;
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
   
   // Fallback para producción en subcarpeta
