@@ -2,10 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\FacFactura;
-use App\Models\Tercero;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+use App\Models\FacFactura;
+use App\Models\OrdenServicioItem;
+use App\Models\Tercero;
 
 class ElectronicInvoicingService
 {
@@ -40,8 +41,8 @@ class ElectronicInvoicingService
             // 5. Determinar el endpoint adecuado
             $endpoint = $this->getEndpoint($documentType);
 
-            // MODO DEBUG: Retorna el JSON sin enviar
-            if (config('services.dataico.debug_mode', true)) {
+            // MODO DEBUG: Solo si env es PRUEBAS
+            if (config('services.dataico.env', 'PRUEBAS') === 'PRUEBAS') {
                 return [
                     'success' => true,
                     'debug' => true,
@@ -53,14 +54,26 @@ class ElectronicInvoicingService
 
             // 6. Enviar a DataIco
             $result = $this->dataIcoService->sendDocument($payload, $endpoint, $token);
+            Log::info('Respuesta DataIco:', ['result' => $result]);
 
             // 7. Auditar resultado
             $this->auditResult($factura, $result, $payload);
+
+            // Si falló, nos aseguramos de que el mensaje de error de DataIco sea explícito
+            if (!$result['success'] && isset($result['errors']['errors'])) {
+                $errorDetails = [];
+                foreach ($result['errors']['errors'] as $err) {
+                    $path = isset($err['path']) ? implode(' > ', $err['path']) : 'Gral';
+                    $errorDetails[] = "[$path]: " . ($err['error'] ?? 'Error desconocido');
+                }
+                $result['message'] = "Errores de validación DataIco: " . implode(' | ', $errorDetails);
+            }
 
             return $result;
 
         } catch (\Exception $e) {
             Log::error("Error procesando factura electrónica (ID $facturaFiscalId): " . $e->getMessage());
+            Log::error("Payload enviado:", ['payload' => $payload]);
             return [
                 'success' => false,
                 'message' => 'Error interno procesando la factura',
@@ -99,50 +112,134 @@ class ElectronicInvoicingService
     protected function buildInvoicePayload(FacFactura $factura, int $documentType)
     {
         $tercero = $factura->tercero;
-        
         $payload = [
             "actions" => [
-                "send_dian" => config('services.dataico.send_dian', true),
+                "send_dian" => config('services.dataico.Envio_Dian', true),
                 "send_email" => true
             ],
             "invoice" => [
-                "env" => config('services.dataico.env', 'PRUEBAS'),
-                "number" => $this->getPrefixedNumber($factura, $documentType),
-                "issue_date" => Carbon::parse($factura->fecha_registro)->format('Y-m-d'),
+                "env" => 'PRODUCCION',
+                "dataico_account_id" => config('services.dataico.dataico_account_id', '01808624-3175-8838-83d4-1db98f4da325'),
+                // Solución Definitiva: Limpieza extrema del número para evitar 500 Error
+                "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
                 "payment_date" => $factura->fecha_vencimiento_factura 
-                    ? Carbon::parse($factura->fecha_vencimiento_factura)->format('Y-m-d') 
-                    : Carbon::parse($factura->fecha_registro)->format('Y-m-d'),
+                    ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
+                    : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "order_reference" => "0",
                 "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
+                "operation" => "SS_CUFE",
                 "payment_means" => $this->getPaymentMeans($factura),
-                "payment_means_type" => "MUTUAL_AGREEMENT",
+                "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
                 "numbering" => [
-                    "resolution_number" => config('services.dataico.resolutions.invoice', '18760000000001'),
+                    "resolution_number" => config('services.dataico.resolucion_pruebas', '18760000000001'),
                     "prefix" => $this->getPrefix($documentType),
                     "flexible" => true
                 ],
+                // Campos de sector salud V2 - Formato d/m/Y estrictos
+                "health" => [
+                    "version" => "API_SALUD_V2",
+                    "coverage" => "PLAN_DE_BENEFICIOS",
+                    "provider_code" => "6300100363",
+                    "payment_modality" => "PAGO_POR_EVENTO",
+                    "contract_number" => $factura->contrato_id ?: '0',
+                    "period_start_date" => Carbon::parse($factura->fecha_periodo_inicio ?: $factura->fecha_registro)->format('d/m/Y'),
+                    "period_end_date" => Carbon::parse($factura->fecha_periodo_fin ?: $factura->fecha_registro)->format('d/m/Y'),
+                    "associated_users" => [
+                        "identification" => (string) ($factura->paciente->num_id ?? $tercero->tercero_id),
+                        "identification_type" => $this->mapHealthIdType($factura->paciente->tipo_id ?? $factura->tipo_id_tercero),
+                        "dian_identification_type" => $this->mapIdType($factura->paciente->tipo_id ?? $factura->tipo_id_tercero),
+                        "identification_origin_country" => "República de Colombia",
+                        "first_name" => $factura->paciente->primer_nombre ?? $tercero->primer_nombre ?? 'x',
+                        "second_first_name" => $factura->paciente->segundo_nombre ?? '',
+                        "last_name" => $factura->paciente->primer_apellido ?? $tercero->primer_apellido ?? 'x',
+                        "second_last_name" => $factura->paciente->segundo_apellido ?? '',
+                        "user_type" => "CONTRIBUTIVO_COTIZANTE",
+                        "coverage" => "PLAN_DE_BENEFICIOS",
+                        "provider_code" => "6300100363",
+                        "payment_modality" => "PAGO_POR_EVENTO",
+                        "authorization_number" => $factura->num_autorizacion ?: ''
+                    ],
+                    "recaudos" => $this->buildRecaudos($factura)
+                ],
+                // Documentos asociados
+                "associated_documents" => $this->buildAssociatedDocuments($factura),
+                "notes" => $this->buildNotes($factura),
                 "customer" => [
                     "email" => $tercero->email ?? 'correo@generico.com',
                     "phone" => $tercero->telefono ?? '0000000',
                     "party_identification_type" => $this->mapIdType($factura->tipo_id_tercero),
-                    "party_identification" => $factura->tercero_id,
+                    "party_identification" => (string) $factura->tercero_id,
                     "party_type" => ($factura->tipo_id_tercero == 'NIT') ? "PERSONA_JURIDICA" : "PERSONA_NATURAL",
-                    "tax_level_code" => "REGIMEN_ORDINARIO",
-                    "country_code" => "CO",
-                    "company_name" => $tercero->nombre_tercero,
-                    "first_name" => $tercero->primer_nombre ?? $tercero->nombre_tercero,
-                    "family_name" => $tercero->primer_apellido ?? '',
+                    "tax_level_code" => (strpos($tercero->regimen, 'SIMPLIFICADO') !== false) ? 'SIMPLIFICADO' : 'RESPONSABLE_DE_IVA',
+                    "regimen" => 'ORDINARIO',
+                    "department" => substr($this->cleanDataValue($tercero->departamento, 'codigo_dpto_dian') ?: '05', 0, 2),
+                    "city" => substr($this->cleanDataValue($tercero->ciudad, 'codigo_muni_dian') ?: '05001', -3),
+                    "address_line" => $this->cleanDataValue($tercero->direccion) ?: 'S/D',
+                    "country_code" => $this->cleanDataValue($tercero->pais, 'tipo_pais_id') ?: 'CO',
+                    "company_name" => (string) ($tercero->nombre_tercero ?? 'SIN NOMBRE'),
+                    "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
+                    "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
                 ],
                 "items" => $this->buildInvoiceItems($factura, $documentType)
             ]
         ];
-
-        // Lógica de Sector Salud (API_SALUD_V2)
-        if ($factura->tipo_factura != '5' && $factura->tipo_factura != '6') {
-            $payload['invoice']['health'] = $this->buildHealthObject($factura);
-            $payload['invoice']['operation'] = $this->determineOperation($factura);
-        }
-
         return $payload;
+    }
+
+    protected function buildAssociatedDocuments(FacFactura $factura)
+    {
+        $docs = [];
+        if (($factura->valor_cuota_moderadora ?? 0) > 0) {
+            $docs[] = [
+                "amount" => (string) $factura->valor_cuota_moderadora,
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "medical_fee_code" => "CUOTA_MODERADORA",
+                "number" => "REC-M" . $factura->factura_fiscal,
+                "description" => "CUOTA MODERADORA"
+            ];
+        }
+        if (($factura->valor_cuota_paciente ?? 0) > 0) {
+            $docs[] = [
+                "amount" => (string) $factura->valor_cuota_paciente,
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "medical_fee_code" => "COPAGO",
+                "number" => "REC-P" . $factura->factura_fiscal,
+                "description" => "COPAGO"
+            ];
+        }
+        return $docs;
+    }
+
+    protected function buildRecaudos(FacFactura $factura)
+    {
+        $recaudos = [];
+        if (($factura->valor_cuota_moderadora ?? 0) > 0) {
+            $recaudos[] = [
+                "description" => "CUOTA MODERADORA",
+                "amount" => (float) $factura->valor_cuota_moderadora,
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "medical_fee_code" => "CUOTA_MODERADORA"
+            ];
+        }
+        if (($factura->valor_cuota_paciente ?? 0) > 0) {
+            $recaudos[] = [
+                "description" => "COPAGO",
+                "amount" => (float) $factura->valor_cuota_paciente,
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "medical_fee_code" => "COPAGO"
+            ];
+        }
+        return $recaudos;
+    }
+
+    protected function buildNotes(FacFactura $factura)
+    {
+        // Retorna un array de ejemplo, puedes personalizar según tu lógica
+        return [
+            "FACTURADOR: SISTEMA MASTER",
+            "SON: DIECIOCHO MIL SEISCIENTOS TRECE PESOS MCTE"
+        ];
     }
 
     protected function getPrefixedNumber(FacFactura $factura, int $documentType)
@@ -185,8 +282,27 @@ class ElectronicInvoicingService
             'IE' => 'IE',
             'PE' => 'PEP',
             'SC' => 'PEP',
+            'PT' => 'PEP',
         ];
-        return $map[$type] ?? 'NIT_OTRO_PAIS';
+        return $map[$type] ?? 'NIT';
+    }
+
+    /**
+     * Mapeo específico para el objeto health.associated_users (DataIco Salud V2)
+     */
+    protected function mapHealthIdType($type)
+    {
+        $map = [
+            'CC' => 'CEDULA_CIUDADANIA',
+            'CE' => 'CEDULA_EXTRANJERIA',
+            'TI' => 'TARJETA_IDENTIDAD',
+            'RC' => 'REGISTRO_CIVIL_NACIMIENTO',
+            'PA' => 'PASAPORTE',
+            'PE' => 'PERMISO_ESPECIAL_PERMANENCIA',
+            'PT' => 'PERMISO_PROTECCION_TEMPORAL',
+            'NIT' => 'CEDULA_CIUDADANIA', // DataIco V2 no admite NIT en personas de salud
+        ];
+        return $map[$type] ?? 'CEDULA_CIUDADANIA';
     }
 
     protected function buildInvoiceItems(FacFactura $factura, int $documentType)
@@ -196,22 +312,19 @@ class ElectronicInvoicingService
         if ($factura->items && $factura->items->count() > 0) {
             foreach ($factura->items as $item) {
                 // Intentar obtener el detalle de la orden de servicio
-                // Si la relación directa falla, buscamos manualmente por servicio_id como plan B
                 $osItem = $item->ordenServicioItem;
-                
                 if (!$osItem && $item->item_id) {
                     $osItem = \App\Models\OrdenServicioItem::where('servicio_id', $item->item_id)
                         ->where('orden_servicio_id', $item->orden_servicio_id)
                         ->first();
                 }
-
                 $description = 'Servicios Hospitalarios';
                 $price = (float) ($item->valor_total ?? 0);
                 $quantity = 1;
-                $sku = $item->item_id ?? 'SERV_001';
-
+                // SKU nunca puede ser vacío
+                $sku = $item->item_id ? $item->item_id : 'SERV_001';
                 if ($osItem) {
-                    $sku = $osItem->item_id;
+                    $sku = $osItem->item_id ? $osItem->item_id : 'SERV_001';
                     $quantity = (float) $osItem->cantidad;
                     $description = $osItem->nombre_servicio ?: $osItem->descripcion;
                     $price = (float) $osItem->precio_unitario;
@@ -219,30 +332,40 @@ class ElectronicInvoicingService
                     // Si no existe en la orden de servicio y no tiene precio, lo omitimos
                     continue;
                 }
-
                 $items[] = [
-                    "sku" => $sku,
-                    "quantity" => $quantity,
-                    "description" => $description,
-                    "price" => $price,
-                    "original_price" => $price,
-                    "tax_amount" => 0,
-                    "tax_category" => "01" // IVA 0 (Exento por Salud en Colombia)
+                    "sku" => (string) $sku,
+                    "quantity" => (float) $quantity,
+                    "description" => (string) $description,
+                    "price" => (float) $price,
+                    "original_price" => (float) $price,
+                    "taxes" => [
+                        [
+                            "tax_category" => "IVA",
+                            "tax_rate" => 0,
+                            "tax_amount" => 0,
+                            "taxable_amount" => (float) $price
+                        ]
+                    ]
                 ];
             }
         } else {
             // Item genérico si no hay detalles (vía Concepto)
             $items[] = [
                 "sku" => "GEN001",
-                "quantity" => 1,
+                "quantity" => 1.0,
                 "description" => $factura->concepto ?? 'Servicios de Salud Integrales',
                 "price" => (float) $factura->total_factura,
                 "original_price" => (float) $factura->total_factura,
-                "tax_amount" => 0,
-                "tax_category" => "01"
+                "taxes" => [
+                    [
+                        "tax_category" => "IVA",
+                        "tax_rate" => 0,
+                        "tax_amount" => 0,
+                        "taxable_amount" => (float) $factura->total_factura
+                    ]
+                ]
             ];
         }
-
         return $items;
     }
 
@@ -253,9 +376,51 @@ class ElectronicInvoicingService
             "coverage" => "PLAN_DE_BENEFICIOS",
             "provider_code" => "1234567890", // TODO: Obtener del NIT de la empresa
             "payment_modality" => "PAGO_POR_EVENTO",
-            "period_start_date" => Carbon::parse($factura->fecha_registro)->format('Y-m-d'),
-            "period_end_date" => Carbon::parse($factura->fecha_registro)->format('Y-m-d'),
+            "period_start_date" => Carbon::parse($factura->fecha_periodo_inicio ?? $factura->fecha_registro)->format('d/m/Y'),
+            "period_end_date" => Carbon::parse($factura->fecha_periodo_fin ?? $factura->fecha_registro)->format('d/m/Y'),
         ];
+    }
+
+    /**
+     * Limpia y extrae códigos de campos que pueden venir como strings JSON o EDN de Clojure.
+     */
+    protected function cleanDataValue($value, $key = null)
+    {
+        if (empty($value)) return '';
+        if (is_array($value)) return $value[$key] ?? array_values($value)[0] ?? '';
+        
+        $value = trim((string)$value);
+
+        // 1. Caso JSON: {"codigo_dpto_dian":"05",...} o similar
+        if (strpos($value, '{') === 0) {
+            $decoded = json_decode($value, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                if ($key && isset($decoded[$key])) return (string)$decoded[$key];
+                
+                // Intentar encontrar códigos DIAN en el JSON
+                $dianKeys = ['codigo_dpto_dian', 'codigo_muni_dian', 'codigo', 'id'];
+                foreach ($dianKeys as $dk) {
+                    if (isset($decoded[$dk])) return (string)$decoded[$dk];
+                }
+                
+                // Si es una dirección
+                if (isset($decoded['direccion'])) return (string)$decoded['direccion'];
+            }
+        }
+
+        // 2. Caso EDN: {:codigo-dpto-dian "05" ...}
+        if (strpos($value, '{:') === 0) {
+            if ($key) {
+                $keyAlt = str_replace('_', '-', $key);
+                if (preg_match('/:' . $key . '\s+"([^"]+)"/', $value, $matches)) return $matches[1];
+                if (preg_match('/:' . $keyAlt . '\s+"([^"]+)"/', $value, $matches)) return $matches[1];
+            }
+            // Fallback para EDN si no hay key
+            if (preg_match('/:codigo[^ ]*\s+"([^"]+)"/', $value, $matches)) return $matches[1];
+            if (preg_match('/:direccion\s+"([^"]+)"/', $value, $matches)) return $matches[1];
+        }
+
+        return $value;
     }
 
     protected function determineOperation(FacFactura $factura)

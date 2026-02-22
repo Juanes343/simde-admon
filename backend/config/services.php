@@ -12,9 +12,8 @@ return [
         'base_url' => env('DATAICO_BASE_URL', 'https://api.dataico.com/direct/dataico_api/v2'),
         'token' => env('DATAICO_TOKEN', '0a7c5d5e2003f8e957288231af3c4ef5'),
         'account_id' => env('DATAICO_ACCOUNT_ID', '01808624-3175-8838-83d4-1db98f4da325'),
-        'env' => env('DATAICO_ENV', 'PRUEBAS'), // PRUEBAS o PRODUCTO
-        'send_dian' => env('DATAICO_SEND_DIAN', false),
-        'debug_mode' => env('DATAICO_DEBUG', true), // SI ESTA EN TRUE, NO ENVIA Y RETORNA EL JSON
+            'env' => env('DATAICO_ENV', 'PRODUCCION'), // PRUEBAS o PRODUCTO
+            'send_dian' => env('DATAICO_SEND_DIAN', false),
         
         'prefixes' => [
             'invoice' => env('DATAICO_PREFIX_INVOICE', 'FE'),

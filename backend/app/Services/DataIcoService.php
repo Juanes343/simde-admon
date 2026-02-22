@@ -23,7 +23,7 @@ class DataIcoService
             $response = Http::withHeaders([
                 'Auth-Token' => $token,
                 'Content-Type' => 'application/json'
-            ])->post($url, $payload);
+            ])->asJson()->post($url, $payload);
 
             if ($response->successful()) {
                 return [
@@ -32,11 +32,19 @@ class DataIcoService
                 ];
             }
 
+            // En caso de error 500 o similar, logueamos el body crudo para debug
+            if ($response->status() >= 500) {
+                Log::error("ERROR CRITICO DATAICO (500). URL: $url");
+                Log::error("Payload enviado:", ['payload' => $payload]);
+                Log::error("Respuesta cruda de DataIco: " . $response->body());
+            }
+
             return [
                 'success' => false,
                 'status' => $response->status(),
                 'errors' => $response->json(),
-                'message' => 'Error en la respuesta de DataIco'
+                'message' => 'Error en la respuesta de DataIco: ' . ($response->json()['message'] ?? 'Error desconocido'),
+                'raw_body' => $response->body()
             ];
 
         } catch (\Exception $e) {
