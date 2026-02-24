@@ -83,7 +83,7 @@ class FacturacionController extends Controller
             $lapsoFin = $request->query('lapso_fin');
             $tercero = $request->query('tercero');
 
-            $query = FacFactura::with(['items.ordenServicioItem']);
+            $query = FacFactura::with(['items.ordenServicioItem', 'tercero']);
 
             if ($lapsoInicio && !empty($lapsoInicio)) {
                 $query->whereDate('fecha_registro', '>=', $lapsoInicio);

@@ -307,15 +307,6 @@ const FacturasListView = () => {
                         {getDianStatusBadge(f)}
                       </td>
                       <td className="text-center">
-                        <Button 
-                          size="sm" 
-                          variant="outline-secondary" 
-                          title="Ver Detalles" 
-                          className="me-1"
-                        >
-                          <i className="fas fa-eye"></i>
-                        </Button>
-                        
                         {/* Si NO tiene CUFE, mostrar botón para enviar */}
                         {f.estado === '1' && !f.cufe && (
                           <Button 
