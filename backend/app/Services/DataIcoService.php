@@ -16,6 +16,7 @@ class DataIcoService
      */
     public function sendDocument(array $payload, string $endpoint, string $token)
     {
+        // URLs de producción
         $baseUrl = config('services.dataico.base_url', 'https://api.dataico.com/direct/dataico_api/v2');
         $url = "{$baseUrl}/{$endpoint}";
 

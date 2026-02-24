@@ -76,7 +76,23 @@ const FacturasListView = () => {
         });
         loadFacturas(pagination.current_page);
       } catch (error) {
-        Swal.fire('Error', error.response?.data?.error || 'No se pudo procesar la factura electrónica', 'error');
+        const errorData = error.response?.data;
+        const errorMessage = errorData?.message || errorData?.error || 'No se pudo procesar la factura electrónica';
+        const payload = errorData?.payload;
+
+        Swal.fire({
+          title: 'Error de Validación',
+          html: `<div class="text-start">
+                  <p class="text-danger"><b>Mensaje:</b> ${errorMessage}</p>
+                  ${payload ? `
+                  <hr />
+                  <p><b>JSON Enviado (Debug):</b></p>
+                  <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 300px; overflow-y: auto;">${JSON.stringify(payload, null, 2)}</pre>
+                  ` : ''}
+                 </div>`,
+          icon: 'error',
+          width: '700px'
+        });
       } finally {
         setLoading(false);
       }

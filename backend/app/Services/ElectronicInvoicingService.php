@@ -35,24 +35,20 @@ class ElectronicInvoicingService
             // 3. Construir el payload para DataIco
             $payload = $this->buildInvoicePayload($factura, $documentType);
 
-            // 4. Obtener configuración
-            $token = config('services.dataico.token');
-            
-            // 5. Determinar el endpoint adecuado
+            // 4. Determinar endpoint
             $endpoint = $this->getEndpoint($documentType);
 
-            // MODO DEBUG: Solo si env es PRUEBAS
-            if (config('services.dataico.env', 'PRUEBAS') === 'PRUEBAS') {
-                return [
-                    'success' => true,
-                    'debug' => true,
-                    'message' => 'MODO PREVISUALIZACION ACTIVADO',
-                    'payload' => $payload,
-                    'endpoint_target' => $endpoint
-                ];
-            }
+            /* MODO REVISIÓN FORZADO (DESACTIVADO A PEDIDO DEL USUARIO)
+            return [
+                'success' => true,
+                'debug' => true,
+                'message' => 'DEBUG PAYLOAD ACTIVADO',
+                'payload' => $payload,
+                'endpoint_target' => $endpoint
+            ]; */
 
-            // 6. Enviar a DataIco
+            // 5. Enviar a DataIco (Llamada real)
+            $token = config('services.dataico.token');
             $result = $this->dataIcoService->sendDocument($payload, $endpoint, $token);
             Log::info('Respuesta DataIco:', ['result' => $result]);
 
@@ -60,13 +56,17 @@ class ElectronicInvoicingService
             $this->auditResult($factura, $result, $payload);
 
             // Si falló, nos aseguramos de que el mensaje de error de DataIco sea explícito
-            if (!$result['success'] && isset($result['errors']['errors'])) {
-                $errorDetails = [];
-                foreach ($result['errors']['errors'] as $err) {
-                    $path = isset($err['path']) ? implode(' > ', $err['path']) : 'Gral';
-                    $errorDetails[] = "[$path]: " . ($err['error'] ?? 'Error desconocido');
+            if (!$result['success']) {
+                $result['payload'] = $payload; // <-- Marcamos que esto falló
+                
+                if (isset($result['errors']['errors'])) {
+                    $errorDetails = [];
+                    foreach ($result['errors']['errors'] as $err) {
+                        $path = isset($err['path']) ? implode(' > ', $err['path']) : 'Gral';
+                        $errorDetails[] = "[$path]: " . ($err['error'] ?? 'Error desconocido');
+                    }
+                    $result['message'] = "Errores de validación DataIco: " . implode(' | ', $errorDetails);
                 }
-                $result['message'] = "Errores de validación DataIco: " . implode(' | ', $errorDetails);
             }
 
             return $result;
@@ -118,8 +118,8 @@ class ElectronicInvoicingService
                 "send_email" => true
             ],
             "invoice" => [
-                "env" => 'PRODUCCION',
-                "dataico_account_id" => config('services.dataico.dataico_account_id', '01808624-3175-8838-83d4-1db98f4da325'),
+                "env" => config('services.dataico.tipo_envio', 'PRODUCCION'), // Variable de ambiente
+                "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'), // PRODUCCIÓN
                 // Solución Definitiva: Limpieza extrema del número para evitar 500 Error
                 "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
                 "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
@@ -132,7 +132,7 @@ class ElectronicInvoicingService
                 "payment_means" => $this->getPaymentMeans($factura),
                 "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
                 "numbering" => [
-                    "resolution_number" => config('services.dataico.resolucion_pruebas', '18760000000001'),
+                    "resolution_number" => config('services.dataico.resolucion_produccion', '18764096453598'), // Lee de config, fallback producción
                     "prefix" => $this->getPrefix($documentType),
                     "flexible" => true
                 ],

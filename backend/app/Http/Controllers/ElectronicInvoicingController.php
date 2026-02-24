@@ -15,7 +15,7 @@ class ElectronicInvoicingController extends Controller
     }
 
     /**
-     * Envía una factura a la DIAN (vía DataIco).
+     * Envía (o previsualiza) una factura para DataIco.
      * 
      * @param Request $request Contiene id de la factura.
      */
@@ -25,26 +25,21 @@ class ElectronicInvoicingController extends Controller
             'id' => 'required|integer|exists:fac_facturas,factura_fiscal_id',
         ]);
 
+        // Llamamos al servicio (Llamada real)
         $result = $this->einvoicingService->sendInvoice($request->id);
 
-        // Modo Previsualización (Debug)
-        if (isset($result['debug']) && $result['debug']) {
-            return response()->json($result, 200);
-        }
-
-        if ($result['success']) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Factura enviada exitosamente',
-                'data' => $result['data'],
-            ], 200);
-        }
-
+        /**
+         * RESPUESTA FINAL: 
+         * Si success es false, devolvemos 422 para que el Front muestre el error detallado.
+         * Si success es true, devolvemos 200 con la info de éxito (CUFE, etc).
+         */
         return response()->json([
-            'success' => false,
-            'message' => 'Error al enviar la factura',
-            'error' => $result['error'] ?? $result['message'] ?? 'Ocurrió un error desconocido',
-            'status' => $result['status'] ?? 500,
-        ], $result['status'] ?? 500);
+            'success' => $result['success'] ?? false,
+            'debug'   => $result['debug'] ?? false, 
+            'message' => $result['message'] ?? ($result['success'] ? 'Enviado con éxito' : 'Error en envío'),
+            'data'    => $result['data'] ?? null,
+            'payload' => $result['payload'] ?? null,
+            'errors'  => $result['errors'] ?? null
+        ], $result['success'] ? 200 : 422);
     }
 }
