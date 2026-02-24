@@ -64,7 +64,7 @@ const FacturasListView = () => {
   const handleEnviarDataIco = async (factura) => {
     const result = await Swal.fire({
       title: '¿Enviar a DataIco?',
-      text: `Se enviará la factura ${factura.prefijo} ${factura.numero_factura} como facturación electrónica.`,
+      text: `Se enviará la factura ${factura.prefijo} ${factura.factura_fiscal} como facturación electrónica.`,
       icon: 'info',
       showCancelButton: true,
       confirmButtonText: 'Sí, Enviar',
@@ -290,7 +290,7 @@ const FacturasListView = () => {
                 {facturas.length > 0 ? (
                   facturas.map(f => (
                     <tr key={f.factura_fiscal_id}>
-                      <td><strong>{f.prefijo} {f.numero_factura}</strong></td>
+                      <td><strong>{f.prefijo} {f.factura_fiscal}</strong></td>
                       <td>{new Date(f.fecha_registro).toLocaleDateString('es-CO')}</td>
                       <td>
                         <div className="fw-bold">{f.tercero?.nombre_tercero || 'N/A'}</div>

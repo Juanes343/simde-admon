@@ -13,20 +13,28 @@ class FacFactura extends Model
     public $timestamps = false;
 
     protected $fillable = [
+        'empresa_id',
         'prefijo',
-        'numero_factura',
+        'factura_fiscal',
         'tipo_factura',
+        'estado',
+        'usuario_id',
         'estado_electronico',
         'cufe',
         'uuid_dataico',
         'response_dataico',
         'fecha_respuesta_dataico',
         'total_factura',
+        'saldo',
+        'documento_id',
+        'tipo_id_tercero',
         'fecha_registro',
+        'fecha_vencimiento_factura',
         'fecha_periodo_inicio',
         'fecha_periodo_fin',
         'concepto',
         'tercero_id',
+        'observacion',
     ];
 
     protected $casts = [

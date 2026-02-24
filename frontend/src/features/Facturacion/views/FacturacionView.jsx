@@ -101,7 +101,47 @@ const FacturacionView = () => {
         };
 
         const response = await facturacionService.generarFactura(payload);
-        Swal.fire('Éxito', response.message, 'success');
+        const dataIco = response.dataIco;
+
+        if (dataIco?.debug) {
+          Swal.fire({
+            title: 'PREVISUALIZACION JSON (DEBUG)',
+            html: `<div class="text-start">
+                    <p><b>Endpoint:</b> /${dataIco.endpoint_target || 'N/A'}</p>
+                    <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 400px; overflow-y: auto;">${JSON.stringify(dataIco.payload || {}, null, 2)}</pre>
+                   </div>`,
+            icon: 'warning',
+            width: '800px'
+          });
+          return;
+        }
+
+        if (dataIco?.success) {
+          const dianStatus = dataIco.data?.dian_status || 'PENDIENTE';
+          const cufe = dataIco.data?.cufe || 'N/A';
+          const customerStatus = dataIco.data?.customer_status || 'N/A';
+          const emailStatus = dataIco.data?.email_status || 'N/A';
+
+          Swal.fire({
+            title: 'Factura creada y enviada',
+            html: `<div class="text-start">
+                    <p><b>Estado DIAN:</b> ${dianStatus}</p>
+                    <p><b>Estado Cliente:</b> ${customerStatus}</p>
+                    <p><b>Estado Email:</b> ${emailStatus}</p>
+                    <small class="text-muted">CUFE: ${cufe}</small>
+                   </div>`,
+            icon: 'success'
+          });
+        } else {
+          Swal.fire({
+            title: 'Factura creada, envio fallido',
+            html: `<div class="text-start">
+                    <p>${dataIco?.message || 'No se pudo enviar a DataIco'}</p>
+                   </div>`,
+            icon: 'warning'
+          });
+        }
+
         setSelectedItems([]);
         loadPendientes();
       } catch (error) {

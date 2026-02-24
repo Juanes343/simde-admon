@@ -7,12 +7,19 @@ use App\Models\FacFactura;
 use App\Models\FacFacturaItem;
 use App\Models\OrdenServicio;
 use App\Models\OrdenServicioItem;
+use App\Services\ElectronicInvoicingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class FacturacionController extends Controller
 {
+    protected $invoicingService;
+
+    public function __construct(ElectronicInvoicingService $invoicingService)
+    {
+        $this->invoicingService = $invoicingService;
+    }
     /**
      * Obtiene los prefijos de facturación habilitados.
      */
@@ -134,50 +141,66 @@ class FacturacionController extends Controller
             'observacion' => 'nullable|string',
         ]);
 
-        return DB::transaction(function () use ($validated, $request) {
-            $prefijoDoc = Documento::findOrFail($validated['documento_id']);
-            
-            // Incrementar numeración
-            $numeroFactura = $prefijoDoc->numeracion + 1;
-            $prefijoDoc->numeracion = $numeroFactura;
-            $prefijoDoc->save();
+        try {
+            return DB::transaction(function () use ($validated, $request) {
+                $prefijoDoc = Documento::findOrFail($validated['documento_id']);
+                
+                // Incrementar numeración
+                $numeroFactura = $prefijoDoc->numeracion + 1;
+                $prefijoDoc->numeracion = $numeroFactura;
+                $prefijoDoc->save();
 
-            // Calcular totales a partir de los items enviados
-            $itemsIds = collect($validated['items'])->pluck('item_id');
-            $ordenItems = OrdenServicioItem::whereIn('item_id', $itemsIds)->get();
-            $totalFactura = $ordenItems->sum('subtotal');
+                // Calcular totales a partir de los items enviados
+                $itemsIds = collect($validated['items'])->pluck('item_id');
+                $ordenItems = OrdenServicioItem::whereIn('item_id', $itemsIds)->get();
+                $totalFactura = $ordenItems->sum('subtotal');
 
-            // Crear Factura
-            $factura = FacFactura::create([
-                'empresa_id' => $prefijoDoc->empresa_id,
-                'prefijo' => $prefijoDoc->prefijo,
-                'factura_fiscal' => $numeroFactura,
-                'estado' => '1',
-                'usuario_id' => $request->user()->usuario_id ?? 1, // fallback por si no hay auth
-                'total_factura' => $totalFactura,
-                'tipo_id_tercero' => $validated['tipo_id_tercero'],
-                'tercero_id' => $validated['tercero_id'],
-                'documento_id' => $prefijoDoc->documento_id,
-                'tipo_factura' => 'F', // Factura fiscal
-                'saldo' => $totalFactura,
-                'fecha_vencimiento_factura' => Carbon::now()->addDays(30),
-                'observacion' => $validated['observacion'],
-                'fecha_registro' => Carbon::now(),
-            ]);
-
-            // Registrar los items relacionados
-            foreach ($ordenItems as $item) {
-                FacFacturaItem::create([
-                    'factura_fiscal_id' => $factura->factura_fiscal_id,
-                    'orden_servicio_id' => $item->orden_servicio_id,
-                    'item_id' => $item->item_id,
+                // Crear Factura
+                $factura = FacFactura::create([
+                    'empresa_id' => $prefijoDoc->empresa_id,
+                    'prefijo' => $prefijoDoc->prefijo,
+                    'factura_fiscal' => $numeroFactura,
+                    'estado' => '1',
+                    'usuario_id' => $request->user()->usuario_id ?? 1, // fallback por si no hay auth
+                    'total_factura' => $totalFactura,
+                    'tipo_id_tercero' => $validated['tipo_id_tercero'],
+                    'tercero_id' => $validated['tercero_id'],
+                    'documento_id' => $prefijoDoc->documento_id,
+                    'tipo_factura' => 'F', // Factura fiscal
+                    'saldo' => $totalFactura,
+                    'fecha_vencimiento_factura' => Carbon::now()->addDays(30),
+                    'observacion' => $validated['observacion'],
+                    'fecha_registro' => Carbon::now(),
                 ]);
-            }
 
+                // Registrar los items relacionados
+                foreach ($ordenItems as $item) {
+                    FacFacturaItem::create([
+                        'factura_fiscal_id' => $factura->factura_fiscal_id,
+                        'orden_servicio_id' => $item->orden_servicio_id,
+                        'item_id' => $item->item_id,
+                    ]);
+                }
+
+                // Cargar factura con items e inmediatamente enviar a DataIco
+                $factura = $factura->load('items.ordenServicioItem', 'tercero');
+                
+                // Enviar a DataIco automáticamente
+                $dataIcoResult = $this->invoicingService->sendInvoice($factura->factura_fiscal_id);
+
+                return response()->json([
+                    'message' => 'Factura creada con éxito',
+                    'factura' => $factura,
+                    'dataIco' => $dataIcoResult
+                ], 201);
+            });
+        } catch (\Exception $e) {
             return response()->json([
-                'message' => 'Factura creada con éxito',
-                'factura' => $factura->load('items')
-            ], 201);
-        });
+                'message' => 'Server Error',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ], 500);
+        }
     }
 }
