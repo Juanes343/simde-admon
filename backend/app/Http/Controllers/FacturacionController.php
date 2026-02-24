@@ -161,12 +161,12 @@ class FacturacionController extends Controller
                     'prefijo' => $prefijoDoc->prefijo,
                     'factura_fiscal' => $numeroFactura,
                     'estado' => '1',
-                    'usuario_id' => $request->user()->usuario_id ?? 1, // fallback por si no hay auth
+                    'usuario_id' => $request->user()->usuario_id ?? 1,
                     'total_factura' => $totalFactura,
                     'tipo_id_tercero' => $validated['tipo_id_tercero'],
                     'tercero_id' => $validated['tercero_id'],
                     'documento_id' => $prefijoDoc->documento_id,
-                    'tipo_factura' => 'F', // Factura fiscal
+                    'tipo_factura' => '5', // Tipo 5: Sin datos de salud
                     'saldo' => $totalFactura,
                     'fecha_vencimiento_factura' => Carbon::now()->addDays(30),
                     'observacion' => $validated['observacion'],

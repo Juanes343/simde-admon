@@ -113,78 +113,54 @@ class ElectronicInvoicingService
     protected function buildInvoicePayload(FacFactura $factura, int $documentType)
     {
         $tercero = $factura->tercero;
+        
+        // Construir base del invoice
+        $invoiceData = [
+            "env" => config('services.dataico.tipo_envio', 'PRODUCCION'),
+            "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'),
+            "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
+            "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+            "payment_date" => $factura->fecha_vencimiento_factura 
+                ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
+                : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+            "order_reference" => "0",
+            "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
+            "operation" => "ESTANDAR",
+            "payment_means" => $this->getPaymentMeans($factura),
+            "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
+            "numbering" => [
+                "resolution_number" => config('services.dataico.resolucion_produccion', '18764096453598'),
+                "prefix" => $this->getPrefix($documentType),
+                "flexible" => true
+            ],
+            "email" => $tercero->email ?? 'correo@generico.com',
+            "phone" => $tercero->telefono ?? '0000000',
+            "party_identification_type" => $this->mapIdType($factura->tipo_id_tercero),
+            "party_identification" => (string) $factura->tercero_id,
+            "party_type" => ($factura->tipo_id_tercero == 'NIT') ? "PERSONA_JURIDICA" : "PERSONA_NATURAL",
+            "tax_level_code" => (strpos($tercero->regimen, 'SIMPLIFICADO') !== false) ? 'SIMPLIFICADO' : 'RESPONSABLE_DE_IVA',
+            "regimen" => 'ORDINARIO',
+            "department" => substr($this->cleanDataValue($tercero->departamento, 'codigo_dpto_dian') ?: '05', 0, 2),
+            "city" => substr($this->cleanDataValue($tercero->ciudad, 'codigo_muni_dian') ?: '05001', -3),
+            "address_line" => $this->cleanDataValue($tercero->direccion) ?: 'S/D',
+            "country_code" => $this->cleanDataValue($tercero->pais, 'tipo_pais_id') ?: 'CO',
+            "company_name" => (string) ($tercero->nombre_tercero ?? 'SIN NOMBRE'),
+            "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
+            "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
+            "items" => $this->buildInvoiceItems($factura, $documentType)
+        ];
+
+        // NOTA: No enviamos "health" - DataIco lo requiere solo cuando está COMPLETAMENTE lleno
+        // El JSON exitoso de ejemplo no incluye este bloque
+
         $payload = [
             "actions" => [
                 "send_dian" => config('services.dataico.Envio_Dian', true),
                 "send_email" => true
             ],
-            "invoice" => [
-                "env" => config('services.dataico.tipo_envio', 'PRODUCCION'), // Variable de ambiente
-                "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'), // PRODUCCIÓN
-                // Solución Definitiva: Limpieza extrema del número para evitar 500 Error
-                "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
-                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
-                "payment_date" => $factura->fecha_vencimiento_factura 
-                    ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
-                    : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
-                "order_reference" => "0",
-                "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
-                "operation" => "SS_CUFE",
-                "payment_means" => $this->getPaymentMeans($factura),
-                "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
-                "numbering" => [
-                    "resolution_number" => config('services.dataico.resolucion_produccion', '18764096453598'), // Lee de config, fallback producción
-                    "prefix" => $this->getPrefix($documentType),
-                    "flexible" => true
-                ],
-                // Campos de sector salud V2 - Formato d/m/Y estrictos
-                "health" => [
-                    "version" => "API_SALUD_V2",
-                    "coverage" => "PLAN_DE_BENEFICIOS",
-                    "provider_code" => "6300100363",
-                    "payment_modality" => "PAGO_POR_EVENTO",
-                    "contract_number" => $factura->contrato_id ?: '0',
-                    "period_start_date" => Carbon::parse($factura->fecha_periodo_inicio ?: $factura->fecha_registro)->format('d/m/Y'),
-                    "period_end_date" => Carbon::parse($factura->fecha_periodo_fin ?: $factura->fecha_registro)->format('d/m/Y'),
-                    "associated_users" => [
-                        "identification" => (string) ($factura->paciente->num_id ?? $tercero->tercero_id),
-                        "identification_type" => $this->mapHealthIdType($factura->paciente->tipo_id ?? $factura->tipo_id_tercero),
-                        "dian_identification_type" => $this->mapIdType($factura->paciente->tipo_id ?? $factura->tipo_id_tercero),
-                        "identification_origin_country" => "República de Colombia",
-                        "first_name" => $factura->paciente->primer_nombre ?? $tercero->primer_nombre ?? 'x',
-                        "second_first_name" => $factura->paciente->segundo_nombre ?? '',
-                        "last_name" => $factura->paciente->primer_apellido ?? $tercero->primer_apellido ?? 'x',
-                        "second_last_name" => $factura->paciente->segundo_apellido ?? '',
-                        "user_type" => "CONTRIBUTIVO_COTIZANTE",
-                        "coverage" => "PLAN_DE_BENEFICIOS",
-                        "provider_code" => "6300100363",
-                        "payment_modality" => "PAGO_POR_EVENTO",
-                        "authorization_number" => $factura->num_autorizacion ?: ''
-                    ],
-                    "recaudos" => $this->buildRecaudos($factura)
-                ],
-                // Documentos asociados
-                "associated_documents" => $this->buildAssociatedDocuments($factura),
-                "notes" => $this->buildNotes($factura),
-                "customer" => [
-                    "email" => $tercero->email ?? 'correo@generico.com',
-                    "phone" => $tercero->telefono ?? '0000000',
-                    "party_identification_type" => $this->mapIdType($factura->tipo_id_tercero),
-                    "party_identification" => (string) $factura->tercero_id,
-                    "party_type" => ($factura->tipo_id_tercero == 'NIT') ? "PERSONA_JURIDICA" : "PERSONA_NATURAL",
-                    "tax_level_code" => (strpos($tercero->regimen, 'SIMPLIFICADO') !== false) ? 'SIMPLIFICADO' : 'RESPONSABLE_DE_IVA',
-                    "regimen" => 'ORDINARIO',
-                    "department" => substr($this->cleanDataValue($tercero->departamento, 'codigo_dpto_dian') ?: '05', 0, 2),
-                    "city" => substr($this->cleanDataValue($tercero->ciudad, 'codigo_muni_dian') ?: '05001', -3),
-                    "address_line" => $this->cleanDataValue($tercero->direccion) ?: 'S/D',
-                    "country_code" => $this->cleanDataValue($tercero->pais, 'tipo_pais_id') ?: 'CO',
-                    "company_name" => (string) ($tercero->nombre_tercero ?? 'SIN NOMBRE'),
-                    "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
-                    "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
-                ],
-                "items" => $this->buildInvoiceItems($factura, $documentType)
-            ]
+            "invoice" => $invoiceData
         ];
+
         return $payload;
     }
 
@@ -258,9 +234,7 @@ class ElectronicInvoicingService
 
     protected function getInvoiceTypeCode($documentType)
     {
-        if ($documentType == 3) return "CREDIT_NOTE";
-        if ($documentType == 5) return "DEBIT_NOTE";
-        if ($documentType == 8) return "INVOICE_ADVANCE";
+        // DataIco solo acepta: FACTURA_CONTINGENCIA, FACTURA_EXPORTACION, FACTURA_VENTA, NOTA_CREDITO, NOTA_DEBITO
         return "FACTURA_VENTA";
     }
 
