@@ -3,77 +3,104 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FacFactura extends Model
 {
     protected $table = 'fac_facturas';
-    protected $primaryKey = 'factura_fiscal_id'; // Nuestro surrogate ID
+    protected $primaryKey = 'factura_fiscal_id';
+    public $timestamps = false;
 
     protected $fillable = [
-        'empresa_id',
         'prefijo',
-        'factura_fiscal',
-        'estado',
-        'usuario_id',
-        'fecha_registro',
-        'total_factura',
-        'gravamen',
-        'valor_cargos',
-        'valor_cuota_paciente',
-        'valor_cuota_moderadora',
-        'descuento',
-        'plan_id',
-        'tipo_id_tercero',
-        'tercero_id',
-        'sw_clase_factura',
-        'concepto',
-        'total_capitacion_real',
-        'documento_id',
+        'numero_factura',
         'tipo_factura',
-        'documento_contable_id',
-        'saldo',
-        'fecha_vencimiento_factura',
-        'retencion_fuente',
-        'sw_proceso',
-        'rango',
-        'sw_imp_copia',
-        'observacion',
-        'impuesto_cree',
-        'reteica',
-        'sw_factory',
-        'sw_dificil_cobro',
-        'sw_proceso_juridico',
-        'sw_deterioro',
-        'impuesto_4x100',
+        'estado_electronico',
+        'cufe',
+        'uuid_dataico',
+        'response_dataico',
+        'fecha_respuesta_dataico',
+        'total_factura',
+        'fecha_registro',
+        'fecha_periodo_inicio',
+        'fecha_periodo_fin',
+        'concepto',
+        'tercero_id',
     ];
 
     protected $casts = [
         'fecha_registro' => 'datetime',
+        'fecha_respuesta_dataico' => 'datetime',
+        'fecha_periodo_inicio' => 'datetime',
+        'fecha_periodo_fin' => 'datetime',
+        'response_dataico' => 'array',
         'total_factura' => 'decimal:2',
-        'total_capitacion_real' => 'decimal:2',
-        'saldo' => 'decimal:2',
-        'fecha_vencimiento_factura' => 'date',
     ];
 
-    protected $appends = ['tercero'];
-
     /**
-     * Obtener el tercero asociado (composite key)
+     * Relación con los ítems de la factura
      */
-    public function getTerceroAttribute()
-    {
-        return Tercero::where('tipo_id_tercero', $this->tipo_id_tercero)
-                     ->where('tercero_id', $this->tercero_id)
-                     ->first();
-    }
-
-    public function items()
+    public function items(): HasMany
     {
         return $this->hasMany(FacFacturaItem::class, 'factura_fiscal_id', 'factura_fiscal_id');
     }
 
-    public function tercero()
+    /**
+     * Relación con el tercero (cliente)
+     */
+    public function tercero(): BelongsTo
     {
         return $this->belongsTo(Tercero::class, 'tercero_id', 'tercero_id');
+    }
+
+    /**
+     * Relación con los registros de auditoría
+     */
+    public function auditorias(): HasMany
+    {
+        return $this->hasMany(AuditoriaDataIco::class, 'factura_fiscal_id', 'factura_fiscal_id');
+    }
+
+    /**
+     * Obtener la última auditoría para esta factura
+     */
+    public function ultimaAuditoria()
+    {
+        return $this->auditorias()->latest('fecha_registro')->first();
+    }
+
+    /**
+     * Verificar si la factura fue aceptada por DIAN
+     */
+    public function estaAceptadaDian(): bool
+    {
+        return $this->estado_electronico === 'ACEPTADA';
+    }
+
+    /**
+     * Verificar si la factura fue rechazada por DIAN
+     */
+    public function estaRechazadaDian(): bool
+    {
+        return $this->estado_electronico === 'RECHAZADA';
+    }
+
+    /**
+     * Obtener la URL del PDF desde DataIco
+     */
+    public function obtenerUrlPdf(): ?string
+    {
+        $auditoria = $this->ultimaAuditoria();
+        return $auditoria?->pdf_url;
+    }
+
+    /**
+     * Obtener la URL del XML desde DataIco
+     */
+    public function obtenerUrlXml(): ?string
+    {
+        $auditoria = $this->ultimaAuditoria();
+        return $auditoria?->xml_url;
     }
 }

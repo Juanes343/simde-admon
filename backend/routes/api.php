@@ -11,6 +11,7 @@ use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\UbicacionController;
 use App\Http\Controllers\FacturacionController;
 use App\Http\Controllers\ElectronicInvoicingController;
+use App\Http\Controllers\ElectronicInvoiceDownloadController;
 
 /*
 |--------------------------------------------------------------------------
@@ -45,6 +46,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Facturación Electrónica - Auditoría y Descargas
+    Route::get('/electronic-invoicing/audit/{cufe}', [ElectronicInvoiceDownloadController::class, 'getAuditByCufe']);
+    Route::get('/electronic-invoicing/history/{facturaFiscalId}', [ElectronicInvoiceDownloadController::class, 'getAuditHistory']);
+    Route::get('/electronic-invoicing/pdf/{cufe}', [ElectronicInvoiceDownloadController::class, 'downloadPdfByCufe']);
+    Route::get('/electronic-invoicing/xml/{cufe}', [ElectronicInvoiceDownloadController::class, 'downloadXmlByCufe']);
 
     // Tipos de Identificación (catálogo)
     Route::get('/tipos-id-tercero', [TipoIdTerceroController::class, 'index']);

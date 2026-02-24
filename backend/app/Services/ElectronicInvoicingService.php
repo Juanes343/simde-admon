@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Log;
 use App\Models\FacFactura;
 use App\Models\OrdenServicioItem;
 use App\Models\Tercero;
+use App\Models\AuditoriaDataIco;
 
 class ElectronicInvoicingService
 {
@@ -432,17 +433,90 @@ class ElectronicInvoicingService
 
     protected function auditResult(FacFactura $factura, array $result, array $payload)
     {
-        if (isset($result['success']) && $result['success']) {
-            Log::info("Factura ID {$factura->factura_fiscal_id} enviada exitosamente a DataIco. CUFE: " . ($result['data']['cufe'] ?? 'N/A'));
-            
-            // Actualizar estado en la factura
-            $factura->update([
-                'estado_electronico' => 'ENVIADA',
-                'cufe' => $result['data']['cufe'] ?? null,
-                'response_dataico' => isset($result['data']) ? json_encode($result['data']) : null
-            ]);
-        } else {
-            Log::error("Falla en envío de factura ID {$factura->factura_fiscal_id}: " . json_encode($result['errors'] ?? $result['message'] ?? 'Error desconocido'));
+        try {
+            if (isset($result['success']) && $result['success']) {
+                // Extraer datos de la respuesta exitosa
+                $responseData = $result['data'] ?? [];
+                
+                // Crear registro de auditoría
+                $auditRecord = AuditoriaDataIco::create([
+                    'prefijo' => $factura->prefijo,
+                    'factura_fiscal_id' => $factura->factura_fiscal_id,
+                    'numero' => $responseData['number'] ?? $factura->prefijo . $factura->numero_factura,
+                    'dian_status' => $responseData['dian_status'] ?? 'DIAN_EN_PROCESO',
+                    'customer_status' => $responseData['customer_status'] ?? null,
+                    'email_status' => $responseData['email_status'] ?? null,
+                    'cufe' => $responseData['cufe'] ?? null,
+                    'uuid' => $responseData['uuid'] ?? null,
+                    'issue_date' => $responseData['issue_date'] ?? null,
+                    'payment_date' => $responseData['payment_date'] ?? null,
+                    'xml_url' => $responseData['xml_url'] ?? null,
+                    'pdf_url' => $responseData['pdf_url'] ?? null,
+                    'qrcode' => $responseData['qrcode'] ?? null,
+                    'json_respuesta' => json_encode($responseData),
+                ]);
+                
+                // Determinar estado basado en dian_status
+                $estadoElectronico = match ($responseData['dian_status'] ?? 'DIAN_EN_PROCESO') {
+                    'DIAN_ACEPTADO' => 'ACEPTADA',
+                    'DIAN_RECHAZADO' => 'RECHAZADA',
+                    'DIAN_EN_PROCESO' => 'EN_PROCESO',
+                    default => 'ENVIADA',
+                };
+                
+                // Actualizar factura con datos de la respuesta
+                $factura->update([
+                    'estado_electronico' => $estadoElectronico,
+                    'cufe' => $responseData['cufe'] ?? null,
+                    'uuid_dataico' => $responseData['uuid'] ?? null,
+                    'response_dataico' => json_encode($responseData),
+                    'fecha_respuesta_dataico' => now(),
+                ]);
+                
+                Log::info("Factura ID {$factura->factura_fiscal_id} auditada en DataIco", [
+                    'cufe' => $responseData['cufe'] ?? 'N/A',
+                    'dian_status' => $responseData['dian_status'] ?? 'N/A',
+                    'auditoria_id' => $auditRecord->id_auditoria_dataico,
+                ]);
+                
+            } else {
+                // Crear registro de auditoría para errores
+                $errorData = $result['errors'] ?? [];
+                
+                $auditRecord = AuditoriaDataIco::create([
+                    'prefijo' => $factura->prefijo,
+                    'factura_fiscal_id' => $factura->factura_fiscal_id,
+                    'numero' => $factura->prefijo . $factura->numero_factura,
+                    'dian_status' => 'ERROR',
+                    'customer_status' => null,
+                    'email_status' => null,
+                    'cufe' => null,
+                    'uuid' => null,
+                    'json_respuesta' => json_encode([
+                        'error' => true,
+                        'message' => $result['message'] ?? 'Error desconocido',
+                        'errors' => $errorData,
+                        'sent_payload' => $payload,
+                    ]),
+                ]);
+                
+                // Actualizar factura con error
+                $factura->update([
+                    'estado_electronico' => 'ERROR',
+                    'response_dataico' => json_encode([
+                        'error' => true,
+                        'message' => $result['message'] ?? 'Error en envío a DataIco',
+                    ]),
+                    'fecha_respuesta_dataico' => now(),
+                ]);
+                
+                Log::error("Factura ID {$factura->factura_fiscal_id} falló en DataIco", [
+                    'message' => $result['message'] ?? 'Error desconocido',
+                    'auditoria_id' => $auditRecord->id_auditoria_dataico,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error("Error creando registro de auditoría para factura {$factura->factura_fiscal_id}: " . $e->getMessage());
         }
     }
 }

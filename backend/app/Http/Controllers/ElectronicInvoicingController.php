@@ -17,16 +17,16 @@ class ElectronicInvoicingController extends Controller
     /**
      * Envía (o previsualiza) una factura para DataIco.
      * 
-     * @param Request $request Contiene id de la factura.
+     * @param Request $request Contiene factura_fiscal_id de la factura.
      */
     public function sendInvoice(Request $request)
     {
         $request->validate([
-            'id' => 'required|integer|exists:fac_facturas,factura_fiscal_id',
+            'factura_fiscal_id' => 'required|integer|exists:fac_facturas,factura_fiscal_id',
         ]);
 
         // Llamamos al servicio (Llamada real)
-        $result = $this->einvoicingService->sendInvoice($request->id);
+        $result = $this->einvoicingService->sendInvoice($request->factura_fiscal_id);
 
         /**
          * RESPUESTA FINAL: 

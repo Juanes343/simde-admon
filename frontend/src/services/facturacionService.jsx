@@ -28,7 +28,31 @@ const facturacionService = {
   },
 
   enviarDataIco: async (facturaId) => {
-    const response = await api.post('/electronic-invoicing/send', { id: facturaId });
+    const response = await api.post('/electronic-invoicing/send', { factura_fiscal_id: facturaId });
+    return response.data;
+  },
+
+  // Obtener detalles de auditoría por CUFE
+  getAuditByCufe: async (cufe) => {
+    const response = await api.get(`/electronic-invoicing/audit/${cufe}`);
+    return response.data;
+  },
+
+  // Obtener historial completo de auditorías para una factura
+  getAuditHistory: async (facturaFiscalId) => {
+    const response = await api.get(`/electronic-invoicing/history/${facturaFiscalId}`);
+    return response.data;
+  },
+
+  // Descargar PDF desde DataIco
+  downloadPdf: async (cufe) => {
+    const response = await api.get(`/electronic-invoicing/pdf/${cufe}`);
+    return response.data;
+  },
+
+  // Descargar XML desde DataIco
+  downloadXml: async (cufe) => {
+    const response = await api.get(`/electronic-invoicing/xml/${cufe}`);
     return response.data;
   }
 };
