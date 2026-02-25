@@ -26,6 +26,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const [items, setItems] = useState([]);
   const [selectedServicio, setSelectedServicio] = useState('');
   const [cantidad, setCantidad] = useState('1');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editData, setEditData] = useState({});
 
   useEffect(() => {
     loadData();
@@ -148,6 +150,49 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
 
   const handleEliminarServicio = (servicioId) => {
     setItems(items.filter(item => item.servicio_id !== servicioId));
+  };
+
+  const handleEditClick = (index, item) => {
+    setEditingIndex(index);
+    setEditData({
+      cantidad: item.cantidad,
+      precio_unitario: item.precio_unitario
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setEditData({});
+  };
+
+  const handleInputChange = (field, value) => {
+    setEditData({
+      ...editData,
+      [field]: value === '' ? 0 : parseFloat(value)
+    });
+  };
+
+  const handleSaveEdit = (index) => {
+    if (editData.cantidad <= 0) {
+      toast.warning('La cantidad debe ser mayor a 0');
+      return;
+    }
+    if (editData.precio_unitario < 0) {
+      toast.warning('El precio no puede ser negativo');
+      return;
+    }
+
+    const updatedItems = [...items];
+    updatedItems[index] = {
+      ...updatedItems[index],
+      cantidad: parseFloat(editData.cantidad),
+      precio_unitario: parseFloat(editData.precio_unitario),
+      subtotal: parseFloat(editData.cantidad) * parseFloat(editData.precio_unitario)
+    };
+    
+    setItems(updatedItems);
+    setEditingIndex(null);
+    setEditData({});
   };
 
   const calcularTotal = () => {
@@ -351,10 +396,10 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 <thead className="table-light">
                   <tr>
                     <th>Servicio</th>
-                    <th style={{ width: '100px' }}>Cantidad</th>
-                    <th style={{ width: '150px' }}>Precio Unit.</th>
-                    <th style={{ width: '150px' }}>Subtotal</th>
-                    <th style={{ width: '80px' }}>Acción</th>
+                    <th style={{ width: '120px' }} className="text-center">Cantidad</th>
+                    <th style={{ width: '140px' }} className="text-end">Precio Unit.</th>
+                    <th style={{ width: '130px' }} className="text-end">Subtotal</th>
+                    <th style={{ width: '100px' }} className="text-center">Acción</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -365,19 +410,89 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                         <br />
                         <small className="text-muted">{item.tipo_unidad}</small>
                       </td>
-                      <td className="text-end">{item.cantidad}</td>
-                      <td className="text-end">{formatCurrency(item.precio_unitario)}</td>
+                      <td className="text-center">
+                        {editingIndex === index ? (
+                          <Form.Control
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editData.cantidad}
+                            onChange={(e) => handleInputChange('cantidad', e.target.value)}
+                            autoFocus
+                            size="sm"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(index);
+                            }}
+                          />
+                        ) : (
+                          <span>{item.cantidad}</span>
+                        )}
+                      </td>
                       <td className="text-end">
-                        <strong>{formatCurrency(item.subtotal)}</strong>
+                        {editingIndex === index ? (
+                          <Form.Control
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editData.precio_unitario}
+                            onChange={(e) => handleInputChange('precio_unitario', e.target.value)}
+                            size="sm"
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(index);
+                            }}
+                          />
+                        ) : (
+                          <span>{formatCurrency(item.precio_unitario)}</span>
+                        )}
+                      </td>
+                      <td className="text-end">
+                        <strong>
+                          {editingIndex === index
+                            ? formatCurrency(editData.cantidad * editData.precio_unitario)
+                            : formatCurrency(item.subtotal)
+                          }
+                        </strong>
                       </td>
                       <td className="text-center">
-                        <Button
-                          variant="outline-danger"
-                          size="sm"
-                          onClick={() => handleEliminarServicio(item.servicio_id)}
-                        >
-                          <i className="fas fa-trash"></i>
-                        </Button>
+                        {editingIndex === index ? (
+                          <div className="d-flex gap-1 justify-content-center">
+                            <Button
+                              size="sm"
+                              variant="success"
+                              onClick={() => handleSaveEdit(index)}
+                              title="Guardar"
+                            >
+                              <i className="fas fa-check"></i>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={handleCancelEdit}
+                              title="Cancelar"
+                            >
+                              <i className="fas fa-times"></i>
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="d-flex gap-1 justify-content-center">
+                            <Button
+                              size="sm"
+                              variant="outline-primary"
+                              onClick={() => handleEditClick(index, item)}
+                              title="Editar"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline-danger"
+                              onClick={() => handleEliminarServicio(item.servicio_id)}
+                              title="Eliminar"
+                            >
+                              <i className="fas fa-trash"></i>
+                            </Button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
