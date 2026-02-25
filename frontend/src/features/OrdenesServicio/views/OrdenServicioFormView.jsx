@@ -61,10 +61,10 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         setItems(orden.items.map(item => ({
           servicio_id: item.servicio_id,
           nombre_servicio: item.nombre_servicio,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
+          cantidad: parseFloat(item.cantidad) || 0,
+          precio_unitario: parseFloat(item.precio_unitario) || 0,
           tipo_unidad: item.tipo_unidad,
-          subtotal: item.subtotal,
+          subtotal: parseFloat(item.subtotal) || parseFloat(item.cantidad) * parseFloat(item.precio_unitario),
         })));
       }
     }
@@ -196,7 +196,10 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   };
 
   const calcularTotal = () => {
-    return items.reduce((total, item) => total + item.subtotal, 0);
+    return items.reduce((total, item) => {
+      const subtotal = parseFloat(item.subtotal) || (parseFloat(item.cantidad) * parseFloat(item.precio_unitario)) || 0;
+      return total + subtotal;
+    }, 0);
   };
 
   const formatCurrency = (value) => {
