@@ -90,6 +90,7 @@ class OrdenServicioController extends Controller
             'items' => 'required|array|min:1',
             'items.*.servicio_id' => 'required|exists:servicios,servicio_id',
             'items.*.cantidad' => 'required|numeric|min:0.01',
+            'items.*.precio_unitario' => 'nullable|numeric|min:0',
             'items.*.observaciones' => 'nullable|string',
         ], [
             'tipo_id_tercero.required' => 'El tipo de identificación es obligatorio',
@@ -140,7 +141,7 @@ class OrdenServicioController extends Controller
                     'descripcion' => $servicio->descripcion,
                     'cantidad' => $itemData['cantidad'],
                     'tipo_unidad' => $servicio->tipo_unidad,
-                    'precio_unitario' => $servicio->precio_unitario,
+                    'precio_unitario' => $itemData['precio_unitario'] ?? $servicio->precio_unitario,
                     'orden' => $ordenItem++,
                     'observaciones' => $itemData['observaciones'] ?? null,
                 ]);
@@ -212,6 +213,7 @@ class OrdenServicioController extends Controller
             'items' => 'sometimes|array|min:1',
             'items.*.servicio_id' => 'required|exists:servicios,servicio_id',
             'items.*.cantidad' => 'required|numeric|min:0.01',
+            'items.*.precio_unitario' => 'nullable|numeric|min:0',
             'items.*.observaciones' => 'nullable|string',
         ]);
 
@@ -251,7 +253,7 @@ class OrdenServicioController extends Controller
                         'descripcion' => $servicio->descripcion,
                         'cantidad' => $itemData['cantidad'],
                         'tipo_unidad' => $servicio->tipo_unidad,
-                        'precio_unitario' => $servicio->precio_unitario,
+                        'precio_unitario' => $itemData['precio_unitario'] ?? $servicio->precio_unitario,
                         'orden' => $ordenItem++,
                         'observaciones' => $itemData['observaciones'] ?? null,
                     ]);

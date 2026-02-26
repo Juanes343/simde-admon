@@ -290,6 +290,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
       items: items.map(item => ({
         servicio_id: item.servicio_id,
         cantidad: item.cantidad,
+        precio_unitario: item.precio_unitario,
+        observaciones: item.observaciones || '',
       })),
     };
     
