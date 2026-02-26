@@ -4,6 +4,7 @@ import { BiToggleLeft, BiToggleRight } from 'react-icons/bi';
 import { terceroService } from '../../Terceros/services/terceroService';
 import servicioService from '../../Servicios/services/servicioService';
 import retencionFuenteService from '../services/retencionFuenteService';
+import impuestoService from '../../Servicios/services/impuestoService';
 import ordenServicioItemService from '../../../services/ordenServicioItemService';
 import ConfirmModal from '../../../components/ConfirmModal/ConfirmModal';
 import { toast } from 'react-toastify';
@@ -14,6 +15,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const [terceros, setTerceros] = useState([]);
   const [servicios, setServicios] = useState([]);
   const [retenciones, setRetenciones] = useState([]);
+  const [impuestos, setImpuestos] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -101,28 +103,41 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
       });
       
       if (orden.items) {
-        setItems(orden.items.map(item => ({
-          servicio_id: item.servicio_id,
-          nombre_servicio: item.nombre_servicio,
-          cantidad: parseFloat(item.cantidad) || 0,
-          precio_unitario: parseFloat(item.precio_unitario) || 0,
-          tipo_unidad: item.tipo_unidad,
-          subtotal: parseFloat(item.subtotal) || parseFloat(item.cantidad) * parseFloat(item.precio_unitario),
-          observaciones: item.observaciones || '',
-          estado: item.estado || '1',
-          item_id: item.item_id,
-        })));
+        setItems(orden.items.map(item => {
+          // Buscar el servicio para obtener el impuesto_id si no viene en el item
+          const servicio = servicios.find(s => s.servicio_id === item.servicio_id);
+          const impuestoId = item.impuesto_id || servicio?.impuesto_id || null;
+          
+          // Buscar información del impuesto
+          const impuesto = impuestoId ? impuestos.find(imp => imp.impuesto_id === impuestoId) : null;
+          
+          return {
+            servicio_id: item.servicio_id,
+            nombre_servicio: item.nombre_servicio,
+            cantidad: parseFloat(item.cantidad) || 0,
+            precio_unitario: parseFloat(item.precio_unitario) || 0,
+            tipo_unidad: item.tipo_unidad,
+            subtotal: parseFloat(item.subtotal) || parseFloat(item.cantidad) * parseFloat(item.precio_unitario),
+            observaciones: item.observaciones || '',
+            estado: item.estado || '1',
+            item_id: item.item_id,
+            impuesto_id: impuestoId,
+            nombre_impuesto: impuesto?.nombre || '',
+            porcentaje_impuesto: parseFloat(impuesto?.porcentaje || 0),
+          };
+        }));
       }
     }
-  }, [orden]);
+  }, [orden, servicios, impuestos]);
 
   const loadData = async () => {
     try {
       setLoadingData(true);
-      const [tercerosRes, serviciosRes, retencionesRes] = await Promise.all([
+      const [tercerosRes, serviciosRes, retencionesRes, impuestosRes] = await Promise.all([
         terceroService.getAll({ sw_estado: '1', per_page: 1000 }),
         servicioService.getAll({ estado: '1' }),
-        retencionFuenteService.getAll()
+        retencionFuenteService.getAll(),
+        impuestoService.getAll()
       ]);
       
       setTerceros(tercerosRes.data || []);
@@ -133,6 +148,13 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         setRetenciones(retencionesRes.data);
       } else {
         console.warn('No se pudieron cargar retenciones');
+      }
+      
+      // Cargar impuestos desde el servidor
+      if (impuestosRes.success && impuestosRes.data) {
+        setImpuestos(impuestosRes.data);
+      } else {
+        console.warn('No se pudieron cargar impuestos');
       }
     } catch (error) {
       console.error('Error al cargar datos:', error);
@@ -198,6 +220,9 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
 
     const cantidadNum = parseFloat(cantidad);
     const subtotal = cantidadNum * parseFloat(servicio.precio_unitario);
+    
+    // Buscar información del impuesto si existe
+    const impuesto = servicio.impuesto_id ? impuestos.find(imp => imp.impuesto_id === servicio.impuesto_id) : null;
 
     setItems([
       ...items,
@@ -210,6 +235,9 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         subtotal: subtotal,
         observaciones: observacionesItem || '',
         estado: '1',
+        impuesto_id: servicio.impuesto_id || null,
+        nombre_impuesto: impuesto?.nombre || '',
+        porcentaje_impuesto: parseFloat(impuesto?.porcentaje || 0),
       }
     ]);
 
@@ -336,6 +364,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         cantidad: item.cantidad,
         precio_unitario: item.precio_unitario,
         observaciones: item.observaciones || '',
+        impuesto_id: item.impuesto_id || null,
       })),
     };
     
@@ -613,6 +642,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                     <th>Servicio</th>
                     <th style={{ width: '100px' }} className="text-center">Cantidad</th>
                     <th style={{ width: '120px' }} className="text-end">Precio Unit.</th>
+                    <th style={{ width: '140px' }} className="text-center">Impuesto</th>
                     <th style={{ width: '120px' }} className="text-end">Subtotal</th>
                     <th style={{ width: '180px' }}>Observaciones</th>
                     <th style={{ width: '100px' }} className="text-center">Acción</th>
@@ -666,6 +696,17 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                           />
                         ) : (
                           <span>{formatCurrency(item.precio_unitario)}</span>
+                        )}
+                      </td>
+                      <td className="text-center">
+                        {item.impuesto_id ? (
+                          <div>
+                            <small className="text-muted">{item.nombre_impuesto}</small>
+                            <br />
+                            <span className="badge bg-info">{item.porcentaje_impuesto}%</span>
+                          </div>
+                        ) : (
+                          <small className="text-muted">Sin impuesto</small>
                         )}
                       </td>
                       <td className="text-end">
@@ -737,13 +778,13 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                     </tr>
                   ))}
                   <tr className="table-secondary">
-                    <td colSpan="3" className="text-end">
+                    <td colSpan="4" className="text-end">
                       <strong>TOTAL:</strong>
                     </td>
                     <td className="text-end">
                       <strong className="fs-5">{formatCurrency(calcularTotal())}</strong>
                     </td>
-                    <td colSpan="2"></td>
+                    <td colSpan="3"></td>
                   </tr>
                 </tbody>
               </Table>
