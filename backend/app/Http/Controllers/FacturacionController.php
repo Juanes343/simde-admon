@@ -139,6 +139,8 @@ class FacturacionController extends Controller
             'items' => 'required|array|min:1',
             'items.*.item_id' => 'required|exists:orden_servicio_items,item_id',
             'observacion' => 'nullable|string',
+            'fecha_periodo_inicio' => 'nullable|date',
+            'fecha_periodo_fin' => 'nullable|date',
         ]);
 
         try {
@@ -171,6 +173,8 @@ class FacturacionController extends Controller
                     'fecha_vencimiento_factura' => Carbon::now()->addDays(30),
                     'observacion' => $validated['observacion'],
                     'fecha_registro' => Carbon::now(),
+                    'fecha_periodo_inicio' => $validated['fecha_periodo_inicio'] ?? Carbon::now()->startOfMonth(),
+                    'fecha_periodo_fin' => $validated['fecha_periodo_fin'] ?? Carbon::now()->endOfMonth(),
                 ]);
 
                 // Registrar los items relacionados

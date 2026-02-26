@@ -46,6 +46,15 @@ const FacturacionView = () => {
     try {
       const data = await facturacionService.getPendientes(filters.lapso_inicio, filters.lapso_fin, filters.tercero);
       setOrdenes(data);
+      
+      // Pre-seleccionar todos los items
+      const todosLosItems = [];
+      data.forEach(orden => {
+        orden.items.forEach(item => {
+          todosLosItems.push(item.item_id);
+        });
+      });
+      setSelectedItems(todosLosItems);
     } catch (error) {
       Swal.fire('Error', 'No se pudieron cargar las órdenes pendientes', 'error');
     } finally {
@@ -69,6 +78,85 @@ const FacturacionView = () => {
       setSelectedItems(selectedItems.filter(id => id !== itemId));
     } else {
       setSelectedItems([...selectedItems, itemId]);
+    }
+  };
+
+  const getPeriodoFacturable = (orden) => {
+    const hoy = new Date();
+    const fechaInicio = new Date(orden.fecha_inicio);
+    const fechaFin = new Date(orden.fecha_fin);
+
+    // Si hoy está fuera del rango, return null
+    if (hoy < fechaInicio || hoy > fechaFin) {
+      return null;
+    }
+
+    // El período es el mes actual
+    const meses = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const mesActual = hoy.getMonth();
+    const anioActual = hoy.getFullYear();
+    
+    return {
+      mes: mesActual + 1,
+      nombre: meses[mesActual],
+      anio: anioActual,
+      label: `${meses[mesActual]} ${anioActual}`
+    };
+  };
+
+  const handleFacturarOrden = async (orden) => {
+    if (!prefijoSelected) return Swal.fire('Atención', 'Seleccione un prefijo de facturación', 'warning');
+    
+    const periodo = getPeriodoFacturable(orden);
+    if (!periodo) return Swal.fire('Atención', 'La orden no está en período de facturación', 'warning');
+    
+    const itemsOrden = orden.items.filter(i => selectedItems.includes(i.item_id));
+    
+    if (itemsOrden.length === 0) return Swal.fire('Atención', 'Seleccione al menos un ítem para facturar', 'warning');
+
+    const result = await Swal.fire({
+      title: '¿Generar Factura?',
+      text: `Se facturarán ${itemsOrden.length} ítems de la orden ${orden.numero_orden} para ${periodo.label}.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, Facturar',
+      cancelButtonText: 'Cancelar'
+    });
+
+    if (result.isConfirmed) {
+      try {
+        const fechaPeriodoInicio = new Date(periodo.anio, periodo.mes - 1, 1);
+        const fechaPeriodoFin = new Date(periodo.anio, periodo.mes, 0);
+        
+        const payload = {
+          documento_id: prefijoSelected,
+          tercero_id: orden.tercero_id,
+          tipo_id_tercero: orden.tipo_id_tercero,
+          items: itemsOrden.map(item => ({ item_id: item.item_id })),
+          observacion: `Facturación ${periodo.label}`,
+          fecha_periodo_inicio: fechaPeriodoInicio.toISOString().split('T')[0],
+          fecha_periodo_fin: fechaPeriodoFin.toISOString().split('T')[0]
+        };
+        
+        const response = await facturacionService.generarFactura(payload);
+        
+        Swal.fire({
+          title: 'Éxito',
+          html: `<p>Factura generada correctamente</p><p><strong>Número:</strong> ${response.factura.prefijo}-${response.factura.factura_fiscal}</p><p><strong>CUFE:</strong> ${response.factura.cufe || 'Pendiente'}</p>`,
+          icon: 'success',
+          confirmButtonText: 'Aceptar'
+        });
+        
+        // Remover items facturados del listado
+        const nuevosItems = selectedItems.filter(id => !itemsOrden.map(i => i.item_id).includes(id));
+        setSelectedItems(nuevosItems);
+        loadPendientes();
+      } catch (error) {
+        Swal.fire('Error', error.response?.data?.message || 'Error al generar la factura', 'error');
+      }
     }
   };
 
@@ -250,7 +338,11 @@ const FacturacionView = () => {
                         TERCERO: {orden.tercero?.nombre_tercero}
                       </span>
                     </div>
-                    <Badge bg="info">Inicio: {orden.fecha_inicio}</Badge>
+                    {getPeriodoFacturable(orden) ? (
+                      <Badge bg="success">Período: {getPeriodoFacturable(orden).label}</Badge>
+                    ) : (
+                      <Badge bg="danger">Fuera de período</Badge>
+                    )}
                   </Card.Header>
                   <Table size="sm" responsive className="mb-0 bg-white">
                     <thead>
@@ -280,20 +372,20 @@ const FacturacionView = () => {
                       ))}
                     </tbody>
                   </Table>
+                  <Card.Footer className="bg-light d-flex justify-content-end p-3">
+                    {orden.items.filter(i => selectedItems.includes(i.item_id)).length > 0 && (
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => handleFacturarOrden(orden)}
+                      >
+                        <i className="fas fa-file-invoice-dollar me-2"></i>
+                        GENERAR FACTURA ({orden.items.filter(i => selectedItems.includes(i.item_id)).length} ítems)
+                      </Button>
+                    )}
+                  </Card.Footer>
                 </Card>
               ))}
-
-              <div className="d-flex justify-content-end mt-4">
-                <Button 
-                  variant="success" 
-                  size="lg" 
-                  disabled={selectedItems.length === 0}
-                  onClick={handleFacturar}
-                >
-                  <i className="fas fa-file-invoice-dollar me-2"></i>
-                  GENERAR FACTURA ({selectedItems.length} ítems)
-                </Button>
-              </div>
             </>
           )}
         </Card.Body>
