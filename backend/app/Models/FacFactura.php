@@ -63,6 +63,14 @@ class FacFactura extends Model
     }
 
     /**
+     * Relación con el usuario que creó la factura
+     */
+    public function usuario(): BelongsTo
+    {
+        return $this->belongsTo(SystemUsuario::class, 'usuario_id', 'usuario_id');
+    }
+
+    /**
      * Relación con los registros de auditoría
      */
     public function auditorias(): HasMany

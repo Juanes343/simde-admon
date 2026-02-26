@@ -8,6 +8,7 @@ use App\Models\FacFactura;
 use App\Models\OrdenServicioItem;
 use App\Models\Tercero;
 use App\Models\AuditoriaDataIco;
+use App\Models\Impuesto;
 
 class ElectronicInvoicingService
 {
@@ -26,9 +27,11 @@ class ElectronicInvoicingService
      */
     public function sendInvoice(int $facturaFiscalId)
     {
+        $payload = null;
+        
         try {
             // 1. Obtener datos de la factura con relaciones
-            $factura = FacFactura::with(['items.ordenServicioItem', 'tercero'])->findOrFail($facturaFiscalId);
+            $factura = FacFactura::with(['items.ordenServicioItem.ordenServicio', 'tercero', 'usuario'])->findOrFail($facturaFiscalId);
             
             // 2. Determinar el tipo de documento para DataIco/Legacy logic
             $documentType = $this->determineDocumentType($factura);
@@ -74,7 +77,9 @@ class ElectronicInvoicingService
 
         } catch (\Exception $e) {
             Log::error("Error procesando factura electrónica (ID $facturaFiscalId): " . $e->getMessage());
-            Log::error("Payload enviado:", ['payload' => $payload]);
+            if ($payload) {
+                Log::error("Payload enviado:", ['payload' => $payload]);
+            }
             return [
                 'success' => false,
                 'message' => 'Error interno procesando la factura',
@@ -86,6 +91,84 @@ class ElectronicInvoicingService
     /**
      * Mapea tipo_factura a los códigos de la lógica legacy.
      */
+    /**
+     * Convierte un número a palabras en español (colombiano)
+     */
+    protected function numberToWords($num)
+    {
+        $num = (int)$num;
+        if ($num === 0) return 'CERO';
+
+        $unidades = array('', 'UNO', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE');
+        $decenas = array('', '', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA');
+        $centenas = array('', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS');
+        $divisores = array(
+            1000000000 => 'MIL MILLONES',
+            1000000 => 'MILLONES',
+            1000 => 'MIL',
+            1 => ''
+        );
+
+        $palabras = '';
+        
+        if ($num < 10) {
+            return $unidades[$num];
+        } elseif ($num < 20) {
+            $diccionario = array('DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECIOCHO', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE');
+            return $diccionario[$num - 10];
+        } elseif ($num < 100) {
+            $decena = (int)($num / 10);
+            $unidad = $num % 10;
+            if ($unidad === 0) {
+                return $decenas[$decena];
+            } else {
+                return $decenas[$decena] . ' Y ' . $unidades[$unidad];
+            }
+        } elseif ($num < 1000) {
+            $centena = (int)($num / 100);
+            $resto = $num % 100;
+            $palabras = $centenas[$centena];
+            if ($resto > 0) {
+                $palabras .= ' ' . $this->numberToWords($resto);
+            }
+            return $palabras;
+        } else {
+            foreach ($divisores as $divisor => $escalas) {
+                if ($num >= $divisor) {
+                    $cociente = (int)($num / $divisor);
+                    $resto = $num % $divisor;
+                    if ($escalas !== '') {
+                        $palabras = $this->numberToWords($cociente) . ' ' . $escalas;
+                    } else {
+                        $palabras = $this->numberToWords($cociente);
+                    }
+                    if ($resto > 0) {
+                        $palabras .= ' ' . $this->numberToWords($resto);
+                    }
+                    break;
+                }
+            }
+        }
+        
+        return trim($palabras);
+    }
+
+    /**
+     * Formatea un número a letras con denominación de moneda
+     */
+    protected function amountToWords($amount)
+    {
+        $pesos = (int)$amount;
+        $centavos = round(($amount - $pesos) * 100);
+        
+        $palabras = $this->numberToWords($pesos) . ' PESOS';
+        if ($centavos > 0) {
+            $palabras .= ' CON ' . $this->numberToWords($centavos) . ' CENTAVOS';
+        }
+        
+        return $palabras . ' MCTE';
+    }
+
     protected function determineDocumentType(FacFactura $factura)
     {
         switch ($factura->tipo_factura) {
@@ -112,56 +195,95 @@ class ElectronicInvoicingService
      */
     protected function buildInvoicePayload(FacFactura $factura, int $documentType)
     {
-        $tercero = $factura->tercero;
+        try {
+            $tercero = $factura->tercero;
+            
+            // Construir base del invoice
+            $invoiceData = [
+                "env" => config('services.dataico.tipo_envio', 'PRODUCCION'),
+                "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'),
+                "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
+                "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "payment_date" => $factura->fecha_vencimiento_factura 
+                    ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
+                    : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                "order_reference" => "0",
+                "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
+                "operation" => "ESTANDAR",
+                "payment_means" => $this->getPaymentMeans($factura),
+                "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
+                "numbering" => [
+                    "resolution_number" => config('services.dataico.resolucion_produccion', '18764096453598'),
+                    "prefix" => $this->getPrefix($documentType),
+                    "flexible" => true
+                ],
+                "email" => $tercero->email ?? 'correo@generico.com',
+                "phone" => $tercero->telefono ?? '0000000',
+                "party_identification_type" => $this->mapIdType($factura->tipo_id_tercero),
+                "party_identification" => (string) $factura->tercero_id,
+                "party_type" => ($factura->tipo_id_tercero == 'NIT') ? "PERSONA_JURIDICA" : "PERSONA_NATURAL",
+                "tax_level_code" => (strpos($tercero->regimen, 'SIMPLIFICADO') !== false) ? 'SIMPLIFICADO' : 'RESPONSABLE_DE_IVA',
+                "regimen" => 'ORDINARIO',
+                "department" => substr($this->cleanDataValue($tercero->departamento, 'codigo_dpto_dian') ?: '05', 0, 2),
+                "city" => substr($this->cleanDataValue($tercero->ciudad, 'codigo_muni_dian') ?: '05001', -3),
+                "address_line" => $this->cleanDataValue($tercero->direccion) ?: 'S/D',
+                "country_code" => $this->cleanDataValue($tercero->pais, 'tipo_pais_id') ?: 'CO',
+                "company_name" => (string) ($tercero->nombre_tercero ?? 'SIN NOMBRE'),
+                "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
+                "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
+                "items" => $this->buildInvoiceItems($factura, $documentType),
+                "retentions" => $this->buildRetentions($factura)
+            ];
+
+            // NOTA: No enviamos "health" - DataIco lo requiere solo cuando está COMPLETAMENTE lleno
+            // El JSON exitoso de ejemplo no incluye este bloque
+
+            $payload = [
+                "actions" => [
+                    "send_dian" => config('services.dataico.Envio_Dian', true),
+                    "send_email" => true
+                ],
+                "invoice" => $invoiceData
+            ];
+
+            return $payload;
+        } catch (\Exception $e) {
+            Log::error("Error en buildInvoicePayload: " . $e->getMessage());
+            Log::error("Stack trace: " . $e->getTraceAsString());
+            throw $e;
+        }
+    }
+
+    protected function buildRetentions(FacFactura $factura)
+    {
+        $retentions = [];
+        $porcentajeRetFuente = 0;
         
-        // Construir base del invoice
-        $invoiceData = [
-            "env" => config('services.dataico.tipo_envio', 'PRODUCCION'),
-            "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'),
-            "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
-            "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
-            "payment_date" => $factura->fecha_vencimiento_factura 
-                ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
-                : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
-            "order_reference" => "0",
-            "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
-            "operation" => "ESTANDAR",
-            "payment_means" => $this->getPaymentMeans($factura),
-            "payment_means_type" => $factura->medio_pago == 1 ? "DEBITO" : "CREDITO",
-            "numbering" => [
-                "resolution_number" => config('services.dataico.resolucion_produccion', '18764096453598'),
-                "prefix" => $this->getPrefix($documentType),
-                "flexible" => true
-            ],
-            "email" => $tercero->email ?? 'correo@generico.com',
-            "phone" => $tercero->telefono ?? '0000000',
-            "party_identification_type" => $this->mapIdType($factura->tipo_id_tercero),
-            "party_identification" => (string) $factura->tercero_id,
-            "party_type" => ($factura->tipo_id_tercero == 'NIT') ? "PERSONA_JURIDICA" : "PERSONA_NATURAL",
-            "tax_level_code" => (strpos($tercero->regimen, 'SIMPLIFICADO') !== false) ? 'SIMPLIFICADO' : 'RESPONSABLE_DE_IVA',
-            "regimen" => 'ORDINARIO',
-            "department" => substr($this->cleanDataValue($tercero->departamento, 'codigo_dpto_dian') ?: '05', 0, 2),
-            "city" => substr($this->cleanDataValue($tercero->ciudad, 'codigo_muni_dian') ?: '05001', -3),
-            "address_line" => $this->cleanDataValue($tercero->direccion) ?: 'S/D',
-            "country_code" => $this->cleanDataValue($tercero->pais, 'tipo_pais_id') ?: 'CO',
-            "company_name" => (string) ($tercero->nombre_tercero ?? 'SIN NOMBRE'),
-            "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
-            "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
-            "items" => $this->buildInvoiceItems($factura, $documentType)
-        ];
-
-        // NOTA: No enviamos "health" - DataIco lo requiere solo cuando está COMPLETAMENTE lleno
-        // El JSON exitoso de ejemplo no incluye este bloque
-
-        $payload = [
-            "actions" => [
-                "send_dian" => config('services.dataico.Envio_Dian', true),
-                "send_email" => true
-            ],
-            "invoice" => $invoiceData
-        ];
-
-        return $payload;
+        // Obtener porcentaje de retención en la fuente de la orden de servicio
+        if ($factura->items && $factura->items->count() > 0) {
+            $firstItem = $factura->items->first();
+            if ($firstItem && $firstItem->ordenServicioItem) {
+                $osItem = $firstItem->ordenServicioItem;
+                if ($osItem->ordenServicio) {
+                    $porcentajeRetFuente = (float) ($osItem->ordenServicio->porcentaje_ret_fuente ?? 0);
+                }
+            }
+        }
+        
+        // Si hay porcentaje de retención, construir el array
+        if ($porcentajeRetFuente > 0) {
+            $baseAmount = (float) ($factura->total_factura ?? 0);
+            $retentionAmount = ($baseAmount * $porcentajeRetFuente) / 100;
+            
+            $retentions[] = [
+                "tax_category" => "RET_IVA",
+                "tax_rate" => $porcentajeRetFuente,
+                "base_amount" => $baseAmount,
+                "amount" => round($retentionAmount, 2)
+            ];
+        }
+        
+        return $retentions;
     }
 
     protected function buildAssociatedDocuments(FacFactura $factura)
@@ -212,11 +334,22 @@ class ElectronicInvoicingService
 
     protected function buildNotes(FacFactura $factura)
     {
-        // Retorna un array de ejemplo, puedes personalizar según tu lógica
-        return [
-            "FACTURADOR: SISTEMA MASTER",
-            "SON: DIECIOCHO MIL SEISCIENTOS TRECE PESOS MCTE"
-        ];
+        $notas = [];
+        
+        // FACTURADOR: Tomar del usuario que crea la factura
+        $facturador = $factura->usuario ? $factura->usuario->nombre : 'SISTEMA MASTER';
+        $notas[] = "FACTURADOR: {$facturador}";
+        
+        // SON: Convertir monto a letras
+        $montoEnLetras = $this->amountToWords($factura->total_factura);
+        $notas[] = "SON: {$montoEnLetras}";
+        
+        // Agregar observaciones de la orden si existe
+        if (!empty($factura->observacion)) {
+            $notas[] = "OBSERVACIONES: {$factura->observacion}";
+        }
+        
+        return $notas;
     }
 
     protected function getPrefixedNumber(FacFactura $factura, int $documentType)
@@ -296,6 +429,10 @@ class ElectronicInvoicingService
                 $description = 'Servicios Hospitalarios';
                 $price = (float) ($item->valor_total ?? 0);
                 $quantity = 1;
+                $impuestoId = null;
+                $porcentajeImpuesto = 0;
+                $observaciones = '';
+                
                 // SKU nunca puede ser vacío
                 $sku = $item->item_id ? $item->item_id : 'SERV_001';
                 if ($osItem) {
@@ -303,10 +440,29 @@ class ElectronicInvoicingService
                     $quantity = (float) $osItem->cantidad;
                     $description = $osItem->nombre_servicio ?: $osItem->descripcion;
                     $price = (float) $osItem->precio_unitario;
+                    $impuestoId = $osItem->impuesto_id;
+                    $observaciones = $osItem->observaciones ?? '';
+                    
+                    // Obtener información del impuesto si existe
+                    if ($impuestoId) {
+                        $impuesto = Impuesto::find($impuestoId);
+                        if ($impuesto) {
+                            $porcentajeImpuesto = (float) ($impuesto->porcentaje_impuesto ?? $impuesto->porcentaje ?? 0);
+                        }
+                    }
                 } elseif ($price == 0) {
                     // Si no existe en la orden de servicio y no tiene precio, lo omitimos
                     continue;
                 }
+                
+                // Concatenar observaciones a la descripción
+                if (!empty($observaciones)) {
+                    $description .= " - {$observaciones}";
+                }
+                
+                $subtotal = $price * $quantity;
+                $montoImpuesto = ($subtotal * $porcentajeImpuesto) / 100;
+                
                 $items[] = [
                     "sku" => (string) $sku,
                     "quantity" => (float) $quantity,
@@ -316,9 +472,9 @@ class ElectronicInvoicingService
                     "taxes" => [
                         [
                             "tax_category" => "IVA",
-                            "tax_rate" => 0,
-                            "tax_amount" => 0,
-                            "taxable_amount" => (float) $price
+                            "tax_rate" => $porcentajeImpuesto,
+                            "tax_amount" => $montoImpuesto,
+                            "taxable_amount" => (float) $subtotal
                         ]
                     ]
                 ];
