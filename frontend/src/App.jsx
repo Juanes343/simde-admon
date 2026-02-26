@@ -31,6 +31,10 @@ import OrdenServicioDetailPage from './features/OrdenesServicio/pages/OrdenServi
 import FacturacionView from './features/Facturacion/views/FacturacionView';
 import FacturasListView from './features/Facturacion/views/FacturasListView';
 
+// Notas Crédito/Débito
+import NotasCreditoView from './features/NotasCredito/views/NotasCreditoView';
+import NotasCreditoListView from './features/NotasCredito/views/NotasCreditoListView';
+
 // Components
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
 
@@ -172,7 +176,26 @@ function App() {
                 <FacturasListView />
               </PrivateRoute>
             }
-          />          
+          />
+
+          <Route
+            path="/notas"
+            element={
+              <PrivateRoute>
+                <NotasCreditoView />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/notas-historico"
+            element={
+              <PrivateRoute>
+                <NotasCreditoListView />
+              </PrivateRoute>
+            }
+          />
+
           <Route
             path="/ordenes-servicio/:id"
             element={

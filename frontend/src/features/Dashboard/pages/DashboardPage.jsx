@@ -131,7 +131,35 @@ const DashboardPage = () => {
           buttonText: 'Ver Histórico',
           buttonColor: 'primary'
         }
-      ]    }
+      ]
+    },
+    {
+      id: 'notas',
+      title: 'NOTAS CREDITO/DEBITO',
+      icon: 'fa-file-signature',
+      description: 'Gestiona notas credito y debito asociadas a facturas.',
+      color: '#6c4a3a',
+      subModules: [
+        {
+          id: 'generar',
+          title: 'Crear Nota',
+          icon: 'fa-plus-circle',
+          description: 'Selecciona factura e items para crear una nota.',
+          action: () => navigate('/notas'),
+          buttonText: 'Crear Nota',
+          buttonColor: 'success'
+        },
+        {
+          id: 'list',
+          title: 'Consultar Notas',
+          icon: 'fa-list',
+          description: 'Consulta el historial de notas credito.',
+          action: () => navigate('/notas-historico'),
+          buttonText: 'Ver Histórico',
+          buttonColor: 'primary'
+        }
+      ]
+    }
   ];
 
   const renderModules = () => (
