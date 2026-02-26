@@ -54,6 +54,14 @@ const facturacionService = {
   downloadXml: async (cufe) => {
     const response = await api.get(`/electronic-invoicing/xml/${cufe}`);
     return response.data;
+  },
+
+  // Descargar ZIP con PDF + XML
+  descargarZip: async (facturaFiscalId) => {
+    const response = await api.get(`/electronic-invoicing/download-zip/${facturaFiscalId}`, {
+      responseType: 'arraybuffer'
+    });
+    return response.data;
   }
 };
 

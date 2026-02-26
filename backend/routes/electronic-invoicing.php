@@ -29,4 +29,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
         [ElectronicInvoiceDownloadController::class, 'getAuditHistory'])
         ->name('electronic-invoicing.history');
     
+    // Descargar ZIP con PDF + XML
+    Route::get('/electronic-invoicing/download-zip/{facturaFiscalId}', 
+        [ElectronicInvoiceDownloadController::class, 'downloadZip'])
+        ->name('electronic-invoicing.download-zip');
+    
 });

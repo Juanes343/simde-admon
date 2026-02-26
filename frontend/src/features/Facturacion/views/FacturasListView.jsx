@@ -165,6 +165,34 @@ const FacturasListView = () => {
     }
   };
 
+  const handleDownloadZip = async (factura) => {
+    const audit = getAuditInfo(factura);
+    if (!audit || (!audit.pdf_url && !audit.xml_url)) {
+      Swal.fire('Información', 'PDF o XML no disponibles para esta factura', 'info');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await facturacionService.descargarZip(factura.factura_fiscal_id);
+      
+      // Crear un blob y descargar
+      const blob = new Blob([response], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${factura.prefijo}-${factura.factura_fiscal}.zip`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      Swal.fire('Error', 'No se pudo descargar el ZIP', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getEstadoBadge = (factura) => {
     const audit = getAuditInfo(factura);
     
@@ -341,6 +369,15 @@ const FacturasListView = () => {
                               className="me-1"
                             >
                               <i className="fas fa-file-code"></i>
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="info" 
+                              title="Descargar ZIP (PDF + XML)"
+                              onClick={() => handleDownloadZip(f)}
+                              className="me-1"
+                            >
+                              <i className="fas fa-file-archive"></i>
                             </Button>
                             <Button 
                               size="sm" 

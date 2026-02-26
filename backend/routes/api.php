@@ -58,6 +58,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/electronic-invoicing/history/{facturaFiscalId}', [ElectronicInvoiceDownloadController::class, 'getAuditHistory']);
     Route::get('/electronic-invoicing/pdf/{cufe}', [ElectronicInvoiceDownloadController::class, 'downloadPdfByCufe']);
     Route::get('/electronic-invoicing/xml/{cufe}', [ElectronicInvoiceDownloadController::class, 'downloadXmlByCufe']);
+    Route::get('/electronic-invoicing/download-zip/{facturaFiscalId}', [ElectronicInvoiceDownloadController::class, 'downloadZip']);
 
     // Tipos de Identificación (catálogo)
     Route::get('/tipos-id-tercero', [TipoIdTerceroController::class, 'index']);

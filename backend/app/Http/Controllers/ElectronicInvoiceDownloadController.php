@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\AuditoriaDataIco;
+use App\Models\FacFactura;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use ZipArchive;
+use Illuminate\Support\Facades\Storage;
 
 class ElectronicInvoiceDownloadController extends Controller
 {
@@ -136,6 +139,77 @@ class ElectronicInvoiceDownloadController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error obteniendo historial'
+            ], 500);
+        }
+    }
+
+    /**
+     * Descargar ZIP con PDF + XML
+     */
+    public function downloadZip($facturaFiscalId)
+    {
+        try {
+            // Obtener la factura
+            $factura = FacFactura::findOrFail($facturaFiscalId);
+            
+            // Obtener la auditoría más reciente
+            $auditoria = AuditoriaDataIco::where('factura_fiscal_id', $facturaFiscalId)
+                ->latest('fecha_registro')
+                ->first();
+            
+            if (!$auditoria) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Auditoría no encontrada'
+                ], 404);
+            }
+            
+            if (!$auditoria->pdf_url || !$auditoria->xml_url) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'PDF o XML no disponibles'
+                ], 404);
+            }
+            
+            // Crear directorio temporal
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
+            }
+            
+            $zipFileName = "{$factura->prefijo}-{$factura->factura_fiscal}.zip";
+            $zipFilePath = $tempDir . '/' . $zipFileName;
+            
+            // Descargar PDF y XML
+            $pdfContent = Http::get($auditoria->pdf_url)->body();
+            $xmlContent = Http::get($auditoria->xml_url)->body();
+            
+            // Crear ZIP
+            $zip = new ZipArchive();
+            if ($zip->open($zipFilePath, ZipArchive::CREATE) === true) {
+                $zip->addFromString(
+                    "{$factura->prefijo}-{$factura->factura_fiscal}.pdf",
+                    $pdfContent
+                );
+                $zip->addFromString(
+                    "{$factura->prefijo}-{$factura->factura_fiscal}.xml",
+                    $xmlContent
+                );
+                $zip->close();
+                
+                // Descargar el ZIP
+                return response()->download($zipFilePath)->deleteFileAfterSend(true);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Error creando ZIP'
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error("Error descargando ZIP para factura $facturaFiscalId: " . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error descargando ZIP'
             ], 500);
         }
     }
