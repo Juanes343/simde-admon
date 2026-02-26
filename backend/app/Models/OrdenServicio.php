@@ -18,6 +18,7 @@ class OrdenServicio extends Model
         'sw_prorroga_automatica',
         'periodo_facturacion_dias',
         'porcentaje_soltec',
+        'porcentaje_ret_fuente',
         'sw_estado',
         'observaciones',
         'usuario_id',
@@ -27,6 +28,7 @@ class OrdenServicio extends Model
         'fecha_inicio' => 'date',
         'fecha_fin' => 'date',
         'porcentaje_soltec' => 'decimal:2',
+        'porcentaje_ret_fuente' => 'decimal:2',
     ];
 
     protected $appends = ['tercero'];

@@ -19,6 +19,7 @@ class OrdenServicioItem extends Model
         'precio_unitario',
         'subtotal',
         'orden',
+        'observaciones',
     ];
 
     protected $casts = [

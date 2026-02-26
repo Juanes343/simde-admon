@@ -85,16 +85,19 @@ class OrdenServicioController extends Controller
             'sw_prorroga_automatica' => 'required|in:0,1',
             'periodo_facturacion_dias' => 'required|integer|min:1',
             'porcentaje_soltec' => 'nullable|numeric|min:0|max:100',
+            'porcentaje_ret_fuente' => 'nullable|numeric|in:0,0.1,0.5,1,1.5,2,2.5,3,3.5,4,6,7,10,11,20',
             'observaciones' => 'nullable|string',
             'items' => 'required|array|min:1',
             'items.*.servicio_id' => 'required|exists:servicios,servicio_id',
             'items.*.cantidad' => 'required|numeric|min:0.01',
+            'items.*.observaciones' => 'nullable|string',
         ], [
             'tipo_id_tercero.required' => 'El tipo de identificación es obligatorio',
             'tercero_id.required' => 'El tercero es obligatorio',
             'fecha_inicio.required' => 'La fecha de inicio es obligatoria',
             'fecha_fin.required' => 'La fecha de fin es obligatoria',
             'fecha_fin.after_or_equal' => 'La fecha de fin debe ser posterior o igual a la fecha de inicio',
+            'porcentaje_ret_fuente.in' => 'El porcentaje de retención en la fuente no es válido',
             'items.required' => 'Debe agregar al menos un servicio',
             'items.min' => 'Debe agregar al menos un servicio',
         ]);
@@ -119,6 +122,7 @@ class OrdenServicioController extends Controller
                 'sw_prorroga_automatica' => $request->sw_prorroga_automatica,
                 'periodo_facturacion_dias' => $request->periodo_facturacion_dias,
                 'porcentaje_soltec' => $request->porcentaje_soltec ?? 0,
+                'porcentaje_ret_fuente' => $request->porcentaje_ret_fuente ?? 0,
                 'sw_estado' => $request->sw_estado ?? '1',
                 'observaciones' => $request->observaciones,
                 'usuario_id' => $request->user()->usuario_id,
@@ -138,6 +142,7 @@ class OrdenServicioController extends Controller
                     'tipo_unidad' => $servicio->tipo_unidad,
                     'precio_unitario' => $servicio->precio_unitario,
                     'orden' => $ordenItem++,
+                    'observaciones' => $itemData['observaciones'] ?? null,
                 ]);
             }
 
@@ -201,11 +206,13 @@ class OrdenServicioController extends Controller
             'sw_prorroga_automatica' => 'sometimes|required|in:0,1',
             'periodo_facturacion_dias' => 'sometimes|required|integer|min:1',
             'porcentaje_soltec' => 'nullable|numeric|min:0|max:100',
+            'porcentaje_ret_fuente' => 'nullable|numeric|in:0,0.1,0.5,1,1.5,2,2.5,3,3.5,4,6,7,10,11,20',
             'observaciones' => 'nullable|string',
             'sw_estado' => 'sometimes|required|in:0,1',
             'items' => 'sometimes|array|min:1',
             'items.*.servicio_id' => 'required|exists:servicios,servicio_id',
             'items.*.cantidad' => 'required|numeric|min:0.01',
+            'items.*.observaciones' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -222,6 +229,7 @@ class OrdenServicioController extends Controller
                 'sw_prorroga_automatica',
                 'periodo_facturacion_dias',
                 'porcentaje_soltec',
+                'porcentaje_ret_fuente',
                 'observaciones',
                 'sw_estado'
             ]));
@@ -245,6 +253,7 @@ class OrdenServicioController extends Controller
                         'tipo_unidad' => $servicio->tipo_unidad,
                         'precio_unitario' => $servicio->precio_unitario,
                         'orden' => $ordenItem++,
+                        'observaciones' => $itemData['observaciones'] ?? null,
                     ]);
                 }
             }

@@ -74,6 +74,9 @@ const OrdenServicioDetailView = ({ orden }) => {
               {parseFloat(orden.porcentaje_soltec) > 0 && (
                 <p><strong>Porcentaje Soltec:</strong> {orden.porcentaje_soltec}%</p>
               )}
+              {parseFloat(orden.porcentaje_ret_fuente) > 0 && (
+                <p><strong>% Retención en Fuente:</strong> {orden.porcentaje_ret_fuente}%</p>
+              )}
             </Col>
           </Row>
           
@@ -101,9 +104,10 @@ const OrdenServicioDetailView = ({ orden }) => {
             <thead className="table-light">
               <tr>
                 <th>Servicio</th>
-                <th style={{ width: '120px' }} className="text-end">Cantidad</th>
-                <th style={{ width: '150px' }} className="text-end">Precio Unitario</th>
-                <th style={{ width: '150px' }} className="text-end">Subtotal</th>
+                <th style={{ width: '100px' }} className="text-center">Cantidad</th>
+                <th style={{ width: '130px' }} className="text-end">Precio Unitario</th>
+                <th style={{ width: '110px' }} className="text-end">Subtotal</th>
+                <th style={{ width: '200px' }}>Observaciones</th>
               </tr>
             </thead>
             <tbody>
@@ -120,7 +124,7 @@ const OrdenServicioDetailView = ({ orden }) => {
                       {item.tipo_unidad}
                     </Badge>
                   </td>
-                  <td className="text-end align-middle">
+                  <td className="text-center align-middle">
                     {item.cantidad}
                   </td>
                   <td className="text-end align-middle">
@@ -129,12 +133,19 @@ const OrdenServicioDetailView = ({ orden }) => {
                   <td className="text-end align-middle">
                     <strong>{formatCurrency(item.subtotal)}</strong>
                   </td>
+                  <td className="align-middle">
+                    {item.observaciones ? (
+                      <small className="text-muted">{item.observaciones}</small>
+                    ) : (
+                      <small className="text-muted text-decoration-line-through">-</small>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
             <tfoot className="table-secondary">
               <tr>
-                <td colSpan="3" className="text-end">
+                <td colSpan="4" className="text-end">
                   <strong>TOTAL:</strong>
                 </td>
                 <td className="text-end">

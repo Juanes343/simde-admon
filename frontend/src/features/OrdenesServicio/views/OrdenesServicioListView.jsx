@@ -88,6 +88,13 @@ const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView })
                     </small>
                   </div>
                 )}
+                {orden.porcentaje_ret_fuente > 0 && (
+                  <div>
+                    <small className="text-muted">
+                      Ret. Fuente: {orden.porcentaje_ret_fuente}%
+                    </small>
+                  </div>
+                )}
               </td>
               <td>
                 {orden.sw_estado === '1' ? (

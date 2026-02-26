@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card, Table, InputGroup } from 'react-bootstrap';
 import { terceroService } from '../../Terceros/services/terceroService';
 import servicioService from '../../Servicios/services/servicioService';
+import retencionFuenteService from '../services/retencionFuenteService';
 import { toast } from 'react-toastify';
 
 const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
@@ -9,6 +10,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
 
   const [terceros, setTerceros] = useState([]);
   const [servicios, setServicios] = useState([]);
+  const [retenciones, setRetenciones] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
 
   const [formData, setFormData] = useState({
@@ -19,6 +21,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     sw_prorroga_automatica: '0',
     periodo_facturacion_dias: '30',
     porcentaje_soltec: '0',
+    porcentaje_ret_fuente: '0',
     observaciones: '',
     sw_estado: '1',
   });
@@ -26,6 +29,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const [items, setItems] = useState([]);
   const [selectedServicio, setSelectedServicio] = useState('');
   const [cantidad, setCantidad] = useState('1');
+  const [observacionesItem, setObservacionesItem] = useState('');
   const [editingIndex, setEditingIndex] = useState(null);
   const [editData, setEditData] = useState({});
 
@@ -53,6 +57,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         sw_prorroga_automatica: orden.sw_prorroga_automatica || '0',
         periodo_facturacion_dias: orden.periodo_facturacion_dias || '30',
         porcentaje_soltec: orden.porcentaje_soltec || '0',
+        porcentaje_ret_fuente: orden.porcentaje_ret_fuente || '0',
         observaciones: orden.observaciones || '',
         sw_estado: orden.sw_estado || '1',
       });
@@ -65,6 +70,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           precio_unitario: parseFloat(item.precio_unitario) || 0,
           tipo_unidad: item.tipo_unidad,
           subtotal: parseFloat(item.subtotal) || parseFloat(item.cantidad) * parseFloat(item.precio_unitario),
+          observaciones: item.observaciones || '',
         })));
       }
     }
@@ -73,13 +79,21 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const loadData = async () => {
     try {
       setLoadingData(true);
-      const [tercerosRes, serviciosRes] = await Promise.all([
+      const [tercerosRes, serviciosRes, retencionesRes] = await Promise.all([
         terceroService.getAll({ sw_estado: '1', per_page: 1000 }),
-        servicioService.getAll({ estado: '1' })
+        servicioService.getAll({ estado: '1' }),
+        retencionFuenteService.getAll()
       ]);
       
       setTerceros(tercerosRes.data || []);
       setServicios(serviciosRes.data || []);
+      
+      // Cargar retenciones desde el servidor
+      if (retencionesRes.success && retencionesRes.data) {
+        setRetenciones(retencionesRes.data);
+      } else {
+        console.warn('No se pudieron cargar retenciones');
+      }
     } catch (error) {
       console.error('Error al cargar datos:', error);
       toast.error('Error al cargar datos');
@@ -141,11 +155,13 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         precio_unitario: parseFloat(servicio.precio_unitario),
         tipo_unidad: servicio.tipo_unidad,
         subtotal: subtotal,
+        observaciones: observacionesItem || '',
       }
     ]);
 
     setSelectedServicio('');
     setCantidad('1');
+    setObservacionesItem('');
   };
 
   const handleEliminarServicio = (servicioId) => {
@@ -156,7 +172,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     setEditingIndex(index);
     setEditData({
       cantidad: item.cantidad,
-      precio_unitario: item.precio_unitario
+      precio_unitario: item.precio_unitario,
+      observaciones: item.observaciones || ''
     });
   };
 
@@ -168,7 +185,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const handleInputChange = (field, value) => {
     setEditData({
       ...editData,
-      [field]: value === '' ? 0 : parseFloat(value)
+      [field]: field === 'observaciones' ? value : (value === '' ? 0 : parseFloat(value))
     });
   };
 
@@ -187,7 +204,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
       ...updatedItems[index],
       cantidad: parseFloat(editData.cantidad),
       precio_unitario: parseFloat(editData.precio_unitario),
-      subtotal: parseFloat(editData.cantidad) * parseFloat(editData.precio_unitario)
+      subtotal: parseFloat(editData.cantidad) * parseFloat(editData.precio_unitario),
+      observaciones: editData.observaciones || ''
     };
     
     setItems(updatedItems);
@@ -320,6 +338,24 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 />
               </Form.Group>
             </Col>
+            <Col md={3}>
+              <Form.Group className="mb-3">
+                <Form.Label>% Ret. Fuente</Form.Label>
+                <Form.Select
+                  name="porcentaje_ret_fuente"
+                  value={formData.porcentaje_ret_fuente}
+                  onChange={handleChange}
+                  disabled={loadingData || retenciones.length === 0}
+                >
+                  <option value="">Seleccione retención...</option>
+                  {retenciones.map((retencion) => (
+                    <option key={retencion.retencion_id} value={retencion.porcentaje}>
+                      {retencion.porcentaje}% {retencion.descripcion && `- ${retencion.descripcion}`}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            </Col>
           </Row>
 
           {/* Prórroga y Estado */}
@@ -352,7 +388,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           <hr />
           <h6 className="mb-3">Servicios</h6>
           <Row className="mb-3">
-            <Col md={7}>
+            <Col md={5}>
               <Form.Group>
                 <Form.Label>Servicio</Form.Label>
                 <Form.Select
@@ -369,7 +405,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 </Form.Select>
               </Form.Group>
             </Col>
-            <Col md={3}>
+            <Col md={2}>
               <Form.Group>
                 <Form.Label>Cantidad</Form.Label>
                 <Form.Control
@@ -378,6 +414,17 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                   min="0.01"
                   value={cantidad}
                   onChange={(e) => setCantidad(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={3}>
+              <Form.Group>
+                <Form.Label>Observaciones</Form.Label>
+                <Form.Control
+                  type="text"
+                  placeholder="Opcional..."
+                  value={observacionesItem}
+                  onChange={(e) => setObservacionesItem(e.target.value)}
                 />
               </Form.Group>
             </Col>
@@ -399,9 +446,10 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 <thead className="table-light">
                   <tr>
                     <th>Servicio</th>
-                    <th style={{ width: '120px' }} className="text-center">Cantidad</th>
-                    <th style={{ width: '140px' }} className="text-end">Precio Unit.</th>
-                    <th style={{ width: '130px' }} className="text-end">Subtotal</th>
+                    <th style={{ width: '100px' }} className="text-center">Cantidad</th>
+                    <th style={{ width: '120px' }} className="text-end">Precio Unit.</th>
+                    <th style={{ width: '120px' }} className="text-end">Subtotal</th>
+                    <th style={{ width: '180px' }}>Observaciones</th>
                     <th style={{ width: '100px' }} className="text-center">Acción</th>
                   </tr>
                 </thead>
@@ -456,6 +504,19 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                           }
                         </strong>
                       </td>
+                      <td>
+                        {editingIndex === index ? (
+                          <Form.Control
+                            type="text"
+                            value={editData.observaciones || ''}
+                            onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                            size="sm"
+                            placeholder="Observaciones..."
+                          />
+                        ) : (
+                          <small className="text-muted">{item.observaciones || '-'}</small>
+                        )}
+                      </td>
                       <td className="text-center">
                         {editingIndex === index ? (
                           <div className="d-flex gap-1 justify-content-center">
@@ -506,7 +567,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                     <td className="text-end">
                       <strong className="fs-5">{formatCurrency(calcularTotal())}</strong>
                     </td>
-                    <td></td>
+                    <td colSpan="2"></td>
                   </tr>
                 </tbody>
               </Table>

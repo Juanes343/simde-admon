@@ -8,6 +8,7 @@ use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\TipoIdTerceroController;
 use App\Http\Controllers\TipoUnidadServicioController;
 use App\Http\Controllers\ImpuestoController;
+use App\Http\Controllers\RetencionFuenteController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\UbicacionController;
 use App\Http\Controllers\FacturacionController;
@@ -66,6 +67,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Impuestos (catálogo)
     Route::get('/impuestos', [ImpuestoController::class, 'index']);
+
+    // Retenciones en la Fuente (catálogo)
+    Route::get('/retencion-fuente', [RetencionFuenteController::class, 'index']);
 
     // Terceros
     Route::get('/terceros', [TerceroController::class, 'index']);
