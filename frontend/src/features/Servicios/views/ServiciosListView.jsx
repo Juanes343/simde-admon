@@ -39,6 +39,7 @@ const ServiciosListView = ({ servicios, loading, onEdit, onDelete }) => {
             <th className="text-center">Cant.</th>
             <th className="text-center">Unidad</th>
             <th className="text-end">Precio Unit.</th>
+            <th className="text-center">IVA</th>
             <th className="text-center">Estado</th>
             <th className="text-center">Acciones</th>
           </tr>
@@ -65,6 +66,18 @@ const ServiciosListView = ({ servicios, loading, onEdit, onDelete }) => {
               </td>
               <td className="text-end">
                 {formatCurrency(servicio.precio_unitario)}
+              </td>
+              <td className="text-center">
+                {servicio.impuesto ? (
+                  <Badge 
+                    bg={servicio.impuesto.porcentaje === 0 ? 'secondary' : 'warning'}
+                    text={servicio.impuesto.porcentaje === 0 ? 'white' : 'dark'}
+                  >
+                    {servicio.impuesto.porcentaje}%
+                  </Badge>
+                ) : (
+                  <span className="text-muted">-</span>
+                )}
               </td>
               <td className="text-center">
                 <Badge bg={servicio.sw_estado === '1' ? 'success' : 'danger'}>

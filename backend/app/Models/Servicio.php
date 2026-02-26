@@ -16,6 +16,7 @@ class Servicio extends Model
         'cantidad',
         'tipo_unidad',
         'precio_unitario',
+        'impuesto_id',
         'sw_estado',
         'usuario_id',
     ];
@@ -32,6 +33,14 @@ class Servicio extends Model
     public function usuario()
     {
         return $this->belongsTo(SystemUsuario::class, 'usuario_id', 'usuario_id');
+    }
+
+    /**
+     * Relación con el impuesto
+     */
+    public function impuesto()
+    {
+        return $this->belongsTo(Impuesto::class, 'impuesto_id', 'impuesto_id');
     }
 
     /**

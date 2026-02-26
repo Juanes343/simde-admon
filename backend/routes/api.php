@@ -7,11 +7,13 @@ use App\Http\Controllers\TerceroController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\TipoIdTerceroController;
 use App\Http\Controllers\TipoUnidadServicioController;
+use App\Http\Controllers\ImpuestoController;
 use App\Http\Controllers\OrdenServicioController;
 use App\Http\Controllers\UbicacionController;
 use App\Http\Controllers\FacturacionController;
 use App\Http\Controllers\ElectronicInvoicingController;
 use App\Http\Controllers\ElectronicInvoiceDownloadController;
+use App\Http\Controllers\NotaCreditoController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +27,9 @@ Route::get('/ping', function () {
 
 // Facturación Electrónica (DataIco)
 Route::post('/electronic-invoicing/send', [ElectronicInvoicingController::class, 'sendInvoice']);
+
+// Notas Crédito
+Route::get('/notas-credito-conceptos', [NotaCreditoController::class, 'conceptos']);
 
 // Facturación
 Route::get('/facturacion/prefijos', [FacturacionController::class, 'getPrefijos']);
@@ -59,6 +64,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Tipos de Unidad (catálogo)
     Route::get('/tipos-unidad-servicio', [TipoUnidadServicioController::class, 'index']);
 
+    // Impuestos (catálogo)
+    Route::get('/impuestos', [ImpuestoController::class, 'index']);
+
     // Terceros
     Route::get('/terceros', [TerceroController::class, 'index']);
     Route::post('/terceros', [TerceroController::class, 'store']);
@@ -83,4 +91,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+
+    // Notas Crédito
+    Route::get('/notas-credito', [NotaCreditoController::class, 'index']);
+    Route::post('/notas-credito', [NotaCreditoController::class, 'store']);
+    Route::get('/notas-credito/{id}', [NotaCreditoController::class, 'show']);
+    Route::post('/notas-credito/{id}/enviar', [NotaCreditoController::class, 'enviar']);
+    Route::delete('/notas-credito/{id}', [NotaCreditoController::class, 'destroy']);
+    Route::get('/notas-credito/estadisticas', [NotaCreditoController::class, 'estadisticas']);
 });

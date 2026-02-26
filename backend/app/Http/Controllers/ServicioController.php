@@ -41,7 +41,7 @@ class ServicioController extends Controller
 
             // Paginación
             $perPage = $request->get('per_page', 15);
-            $servicios = $query->paginate($perPage);
+            $servicios = $query->with(['usuario', 'impuesto'])->paginate($perPage);
 
             return response()->json($servicios);
         } catch (\Exception $e) {
@@ -63,12 +63,14 @@ class ServicioController extends Controller
             'cantidad' => 'nullable|numeric|min:0',
             'tipo_unidad' => 'required|in:UNIDAD,HORAS',
             'precio_unitario' => 'required|numeric|min:0',
+            'impuesto_id' => 'nullable|exists:impuestos,impuesto_id',
         ], [
             'nombre_servicio.required' => 'El nombre del servicio es obligatorio',
             'tipo_unidad.required' => 'El tipo de unidad es obligatorio',
             'tipo_unidad.in' => 'El tipo de unidad debe ser UNIDAD o HORAS',
             'precio_unitario.required' => 'El precio unitario es obligatorio',
             'precio_unitario.numeric' => 'El precio debe ser un valor numérico',
+            'impuesto_id.exists' => 'El impuesto seleccionado no existe',
         ]);
 
         if ($validator->fails()) {
@@ -91,7 +93,7 @@ class ServicioController extends Controller
 
         return response()->json([
             'message' => 'Servicio creado exitosamente',
-            'servicio' => $servicio->load('usuario')
+            'servicio' => $servicio->load(['usuario', 'impuesto'])
         ], 201);
     }
 
@@ -100,7 +102,7 @@ class ServicioController extends Controller
      */
     public function show($id)
     {
-        $servicio = Servicio::with('usuario')->find($id);
+        $servicio = Servicio::with(['usuario', 'impuesto'])->find($id);
 
         if (!$servicio) {
             return response()->json(['message' => 'Servicio no encontrado'], 404);
@@ -126,6 +128,7 @@ class ServicioController extends Controller
             'cantidad' => 'nullable|numeric|min:0',
             'tipo_unidad' => 'sometimes|required|in:UNIDAD,HORAS',
             'precio_unitario' => 'sometimes|required|numeric|min:0',
+            'impuesto_id' => 'nullable|exists:impuestos,impuesto_id',
         ]);
 
         if ($validator->fails()) {
@@ -136,7 +139,7 @@ class ServicioController extends Controller
 
         return response()->json([
             'message' => 'Servicio actualizado exitosamente',
-            'servicio' => $servicio->load('usuario')
+            'servicio' => $servicio->load(['usuario', 'impuesto'])
         ]);
     }
 
@@ -169,7 +172,7 @@ class ServicioController extends Controller
     public function activos()
     {
         $servicios = Servicio::activos()
-                            ->with('usuario')
+                            ->with(['usuario', 'impuesto'])
                             ->orderBy('nombre_servicio')
                             ->get();
 

@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card } from 'react-bootstrap';
 import { tipoUnidadServicioService } from '../../../services/tipoUnidadServicioService';
+import impuestoService from '../services/impuestoService.jsx';
 import { toast } from 'react-toastify';
 
 const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
   const isEditMode = !!servicio;
   const [tiposUnidad, setTiposUnidad] = useState([]);
   const [loadingTiposUnidad, setLoadingTiposUnidad] = useState(true);
+  const [impuestos, setImpuestos] = useState([]);
+  const [loadingImpuestos, setLoadingImpuestos] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre_servicio: '',
@@ -14,6 +17,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
     cantidad: '',
     tipo_unidad: 'UNIDAD',
     precio_unitario: '',
+    impuesto_id: '',
     sw_estado: '1',
   });
 
@@ -25,6 +29,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
         cantidad: servicio.cantidad || '',
         tipo_unidad: servicio.tipo_unidad || 'UNIDAD',
         precio_unitario: servicio.precio_unitario || '',
+        impuesto_id: servicio.impuesto_id || '',
         sw_estado: servicio.sw_estado || '1',
       });
     }
@@ -46,7 +51,24 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
       }
     };
 
+    const fetchImpuestos = async () => {
+      try {
+        setLoadingImpuestos(true);
+        const response = await impuestoService.getAll();
+        if (response.success) {
+          setImpuestos(response.data);
+        }
+      } catch (error) {
+        console.error('Error al cargar impuestos:', error);
+        // No mostrar error si la tabla no existe aún
+        console.log('Tabla de impuestos no disponible aún. Ejecuta las migraciones.');
+      } finally {
+        setLoadingImpuestos(false);
+      }
+    };
+
     fetchTiposUnidad();
+    fetchImpuestos();
   }, []);
 
   const handleChange = (e) => {
@@ -160,7 +182,29 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
           </Row>
 
           <Row>
-            <Col md={12}>
+            <Col md={6}>
+              <Form.Group className="mb-3">
+                <Form.Label>Impuesto (IVA)</Form.Label>
+                <Form.Select
+                  name="impuesto_id"
+                  value={formData.impuesto_id || ''}
+                  onChange={handleChange}
+                  disabled={loadingImpuestos}
+                >
+                  <option value="">Sin impuesto</option>
+                  {impuestos.map((impuesto) => (
+                    <option key={impuesto.impuesto_id} value={impuesto.impuesto_id}>
+                      {impuesto.nombre} - {impuesto.porcentaje}%
+                    </option>
+                  ))}
+                </Form.Select>
+                <Form.Text className="text-muted">
+                  Seleccione el tipo de IVA aplicable
+                </Form.Text>
+              </Form.Group>
+            </Col>
+
+            <Col md={6}>
               <Form.Group className="mb-3">
                 <Form.Check
                   type="checkbox"
@@ -168,6 +212,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
                   label="Servicio activo"
                   checked={formData.sw_estado === '1'}
                   onChange={handleChange}
+                  style={{ marginTop: '32px' }}
                 />
               </Form.Group>
             </Col>
