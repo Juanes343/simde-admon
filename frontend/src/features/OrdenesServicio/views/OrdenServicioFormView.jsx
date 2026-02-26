@@ -31,6 +31,9 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
 
   const [items, setItems] = useState([]);
   const [selectedServicio, setSelectedServicio] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [filteredServicios, setFilteredServicios] = useState([]);
   const [cantidad, setCantidad] = useState('1');
   const [observacionesItem, setObservacionesItem] = useState('');
   const [editingIndex, setEditingIndex] = useState(null);
@@ -44,6 +47,33 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (searchTerm.trim() === '') {
+      setFilteredServicios([]);
+      setShowDropdown(false);
+    } else {
+      const filtered = servicios.filter(servicio =>
+        servicio.nombre_servicio.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (servicio.descripcion && servicio.descripcion.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+      setFilteredServicios(filtered);
+      setShowDropdown(filtered.length > 0);
+    }
+  }, [searchTerm, servicios]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showDropdown && !event.target.closest('.servicio-search-container')) {
+        setShowDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showDropdown]);
 
   useEffect(() => {
     if (orden) {
@@ -138,14 +168,27 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     }
   };
 
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleSelectServicio = (servicio) => {
+    setSelectedServicio(servicio.servicio_id);
+    setSearchTerm(servicio.nombre_servicio);
+    setShowDropdown(false);
+  };
+
   const handleAgregarServicio = () => {
     if (!selectedServicio || !cantidad || cantidad <= 0) {
-      toast.warning('Seleccione un servicio y cantidad válida');
+      toast.warning('Seleccione un servicio de la lista y una cantidad válida');
       return;
     }
 
     const servicio = servicios.find(s => s.servicio_id === parseInt(selectedServicio));
-    if (!servicio) return;
+    if (!servicio) {
+      toast.warning('Por favor seleccione un servicio válido de la lista');
+      return;
+    }
 
     // Verificar si ya existe
     if (items.find(item => item.servicio_id === servicio.servicio_id)) {
@@ -171,6 +214,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     ]);
 
     setSelectedServicio('');
+    setSearchTerm('');
     setCantidad('1');
     setObservacionesItem('');
   };
@@ -440,20 +484,90 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           <h6 className="mb-3">Servicios</h6>
           <Row className="mb-3">
             <Col md={5}>
-              <Form.Group>
+              <Form.Group className="servicio-search-container" style={{ position: 'relative' }}>
                 <Form.Label>Servicio</Form.Label>
-                <Form.Select
-                  value={selectedServicio}
-                  onChange={(e) => setSelectedServicio(e.target.value)}
-                  disabled={loadingData}
-                >
-                  <option value="">Seleccione un servicio...</option>
-                  {servicios.map((servicio) => (
-                    <option key={servicio.servicio_id} value={servicio.servicio_id}>
-                      {servicio.nombre_servicio} - {formatCurrency(servicio.precio_unitario)} / {servicio.tipo_unidad}
-                    </option>
-                  ))}
-                </Form.Select>
+                <InputGroup>
+                  <InputGroup.Text>
+                    <i className="fas fa-search"></i>
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="text"
+                    placeholder="Buscar servicio por nombre o descripción..."
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={() => {
+                      if (searchTerm.trim() !== '' && filteredServicios.length > 0) {
+                        setShowDropdown(true);
+                      }
+                    }}
+                    disabled={loadingData}
+                    autoComplete="off"
+                  />
+                  {searchTerm && (
+                    <InputGroup.Text 
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setSearchTerm('');
+                        setSelectedServicio('');
+                      }}
+                      title="Limpiar búsqueda"
+                    >
+                      <i className="fas fa-times"></i>
+                    </InputGroup.Text>
+                  )}
+                </InputGroup>
+                {showDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      backgroundColor: 'white',
+                      border: '1px solid #ced4da',
+                      borderRadius: '0.25rem',
+                      zIndex: 1000,
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                      marginTop: '2px'
+                    }}
+                  >
+                    {filteredServicios.length > 0 ? (
+                      filteredServicios.map((servicio) => (
+                        <div
+                          key={servicio.servicio_id}
+                          onClick={() => handleSelectServicio(servicio)}
+                          style={{
+                            padding: '10px 12px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid #f0f0f0'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = '#f8f9fa';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = 'white';
+                          }}
+                        >
+                          <div style={{ fontWeight: '500' }}>{servicio.nombre_servicio}</div>
+                          <small className="text-muted">
+                            {formatCurrency(servicio.precio_unitario)} / {servicio.tipo_unidad}
+                          </small>
+                          {servicio.descripcion && (
+                            <div>
+                              <small className="text-muted">{servicio.descripcion}</small>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ padding: '10px 12px', color: '#6c757d' }}>
+                        No se encontraron servicios
+                      </div>
+                    )}
+                  </div>
+                )}
               </Form.Group>
             </Col>
             <Col md={2}>
