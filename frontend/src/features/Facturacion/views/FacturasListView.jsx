@@ -72,60 +72,66 @@ const FacturasListView = () => {
     });
 
     if (result.isConfirmed) {
-      setLoading(true);
-      try {
-        const response = await facturacionService.enviarDataIco(factura.factura_fiscal_id);
-        
-        // Si el backend retornó el modo debug/payload
-        if (response.debug) {
-            console.log("JSON PREVISUALIZACION:", response.payload);
+      // Mostrar modal de carga
+      Swal.fire({
+        title: 'Enviando factura...',
+        html: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-3">Por favor espera mientras se envía la factura a DataIco.</p>',
+        icon: undefined,
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: async () => {
+          try {
+            const response = await facturacionService.enviarDataIco(factura.factura_fiscal_id);
+            
+            // Si el backend retornó el modo debug/payload
+            if (response.debug) {
+                console.log("JSON PREVISUALIZACION:", response.payload);
+                Swal.fire({
+                    title: 'PREVISUALIZACIÓN JSON (DEBUG)',
+                    html: `<div class="text-start">
+                            <p><b>Endpoint:</b> /${response.endpoint_target}</p>
+                            <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 400px; overflow-y: auto;">${JSON.stringify(response.payload, null, 2)}</pre>
+                           </div>`,
+                    icon: 'warning',
+                    width: '800px'
+                });
+                return;
+            }
+
+            const cufe = response.data?.cufe || 'N/A';
+            const dianStatus = response.data?.dian_status || 'PENDIENTE';
+            
             Swal.fire({
-                title: 'PREVISUALIZACIÓN JSON (DEBUG)',
-                html: `<div class="text-start">
-                        <p><b>Endpoint:</b> /${response.endpoint_target}</p>
-                        <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 400px; overflow-y: auto;">${JSON.stringify(response.payload, null, 2)}</pre>
-                       </div>`,
-                icon: 'warning',
-                width: '800px'
+              title: '✓ Enviado con éxito',
+              html: `<p>Factura enviada a DataIco correctamente.</p>
+                     <p><b>Estado DIAN:</b> ${dianStatus}</p>
+                     <small class="text-muted">CUFE: ${cufe}</small>`,
+              icon: 'success'
             });
-            setLoading(false);
-            return;
+            
+            // Recargar facturas para actualizar estados
+            loadFacturas(pagination.current_page);
+          } catch (error) {
+            const errorData = error.response?.data;
+            const errorMessage = errorData?.message || errorData?.error || 'No se pudo procesar la factura electrónica';
+            const payload = errorData?.payload;
+
+            Swal.fire({
+              title: '✗ Error de Validación',
+              html: `<div class="text-start">
+                      <p class="text-danger"><b>Mensaje:</b> ${errorMessage}</p>
+                      ${payload ? `
+                      <hr />
+                      <p><b>JSON Enviado (Debug):</b></p>
+                      <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 300px; overflow-y: auto;">${JSON.stringify(payload, null, 2)}</pre>
+                      ` : ''}
+                     </div>`,
+              icon: 'error',
+              width: '700px'
+            });
+          }
         }
-
-        const cufe = response.data?.cufe || 'N/A';
-        const dianStatus = response.data?.dian_status || 'PENDIENTE';
-        
-        Swal.fire({
-          title: 'Enviado con éxito',
-          html: `<p>Factura enviada a DataIco.</p>
-                 <p><b>Estado DIAN:</b> ${dianStatus}</p>
-                 <small class="text-muted">CUFE: ${cufe}</small>`,
-          icon: 'success'
-        });
-        
-        // Recargar facturas para actualizar estados
-        loadFacturas(pagination.current_page);
-      } catch (error) {
-        const errorData = error.response?.data;
-        const errorMessage = errorData?.message || errorData?.error || 'No se pudo procesar la factura electrónica';
-        const payload = errorData?.payload;
-
-        Swal.fire({
-          title: 'Error de Validación',
-          html: `<div class="text-start">
-                  <p class="text-danger"><b>Mensaje:</b> ${errorMessage}</p>
-                  ${payload ? `
-                  <hr />
-                  <p><b>JSON Enviado (Debug):</b></p>
-                  <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 300px; overflow-y: auto;">${JSON.stringify(payload, null, 2)}</pre>
-                  ` : ''}
-                 </div>`,
-          icon: 'error',
-          width: '700px'
-        });
-      } finally {
-        setLoading(false);
-      }
+      });
     }
   };
 
@@ -172,25 +178,38 @@ const FacturasListView = () => {
       return;
     }
 
-    try {
-      setLoading(true);
-      const response = await facturacionService.descargarZip(factura.factura_fiscal_id);
-      
-      // Crear un blob y descargar
-      const blob = new Blob([response], { type: 'application/zip' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `${factura.prefijo}-${factura.factura_fiscal}.zip`);
-      document.body.appendChild(link);
-      link.click();
-      link.parentNode.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      Swal.fire('Error', 'No se pudo descargar el ZIP', 'error');
-    } finally {
-      setLoading(false);
-    }
+    // Mostrar modal de descarga
+    Swal.fire({
+      title: 'Descargando ZIP...',
+      html: '<div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div><p class="mt-3">Por favor espera mientras se descarga el ZIP (PDF + XML).</p>',
+      icon: undefined,
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      didOpen: async () => {
+        try {
+          const response = await facturacionService.descargarZip(factura.factura_fiscal_id);
+        
+          // Crear un blob y descargar
+          const blob = new Blob([response], { type: 'application/zip' });
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', `${factura.prefijo}-${factura.factura_fiscal}.zip`);
+          document.body.appendChild(link);
+          link.click();
+          link.parentNode.removeChild(link);
+          window.URL.revokeObjectURL(url);
+        
+          Swal.fire({
+            title: '✓ ZIP Descargado',
+            text: `Archivo ${factura.prefijo}-${factura.factura_fiscal}.zip descargado correctamente.`,
+            icon: 'success'
+          });
+        } catch (error) {
+          Swal.fire('Error', 'No se pudo descargar el ZIP. Intenta nuevamente.', 'error');
+        }
+      }
+    });
   };
 
   const getEstadoBadge = (factura) => {
