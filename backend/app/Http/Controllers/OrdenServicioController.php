@@ -278,6 +278,46 @@ class OrdenServicioController extends Controller
     }
 
     /**
+     * Cambiar estado de un item de orden de servicio
+     * No permite inactivar si el item ya está facturado
+     */
+    public function cambiarEstadoItem(Request $request, $item_id)
+    {
+        $validated = $request->validate([
+            'estado' => 'required|in:0,1',
+        ]);
+
+        try {
+            $item = OrdenServicioItem::findOrFail($item_id);
+            
+            // Validar si está facturado
+            $facturado = DB::table('fac_facturas_items')
+                ->where('item_id', $item_id)
+                ->exists();
+            
+            if ($facturado && $validated['estado'] === '0') {
+                return response()->json([
+                    'message' => 'No se puede inactivar un item que ya está facturado',
+                    'error' => true
+                ], 422);
+            }
+            
+            $item->estado = $validated['estado'];
+            $item->save();
+            
+            return response()->json([
+                'message' => 'Estado del item actualizado correctamente',
+                'item' => $item
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al cambiar estado del item',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Toggle estado de la orden (activar/desactivar)
      */
     public function destroy($id)

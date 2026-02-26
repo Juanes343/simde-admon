@@ -95,6 +95,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+    
+    // Cambiar estado de items de orden de servicio
+    Route::post('/orden-servicio-items/{item_id}/cambiar-estado', [OrdenServicioController::class, 'cambiarEstadoItem']);
 
     // Notas Crédito
     Route::get('/notas-credito', [NotaCreditoController::class, 'index']);

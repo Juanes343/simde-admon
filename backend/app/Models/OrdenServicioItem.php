@@ -20,6 +20,7 @@ class OrdenServicioItem extends Model
         'subtotal',
         'orden',
         'observaciones',
+        'estado',
     ];
 
     protected $casts = [

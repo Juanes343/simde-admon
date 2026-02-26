@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Row, Col, Card, Table, InputGroup } from 'react-bootstrap';
+import { BiToggleLeft, BiToggleRight } from 'react-icons/bi';
 import { terceroService } from '../../Terceros/services/terceroService';
 import servicioService from '../../Servicios/services/servicioService';
 import retencionFuenteService from '../services/retencionFuenteService';
+import ordenServicioItemService from '../../../services/ordenServicioItemService';
+import ConfirmModal from '../../../components/ConfirmModal/ConfirmModal';
 import { toast } from 'react-toastify';
 
 const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
@@ -32,6 +35,11 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const [observacionesItem, setObservacionesItem] = useState('');
   const [editingIndex, setEditingIndex] = useState(null);
   const [editData, setEditData] = useState({});
+  
+  // Estados para el modal de confirmación
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [itemToToggle, setItemToToggle] = useState(null);
+  const [indexToToggle, setIndexToToggle] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -71,6 +79,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           tipo_unidad: item.tipo_unidad,
           subtotal: parseFloat(item.subtotal) || parseFloat(item.cantidad) * parseFloat(item.precio_unitario),
           observaciones: item.observaciones || '',
+          estado: item.estado || '1',
+          item_id: item.item_id,
         })));
       }
     }
@@ -156,6 +166,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         tipo_unidad: servicio.tipo_unidad,
         subtotal: subtotal,
         observaciones: observacionesItem || '',
+        estado: '1',
       }
     ]);
 
@@ -164,8 +175,46 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     setObservacionesItem('');
   };
 
-  const handleEliminarServicio = (servicioId) => {
-    setItems(items.filter(item => item.servicio_id !== servicioId));
+  const handleCambiarEstadoItem = (index, item) => {
+    setItemToToggle(item);
+    setIndexToToggle(index);
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmToggle = async () => {
+    const item = itemToToggle;
+    const index = indexToToggle;
+    
+    // Si el item no tiene item_id, es nuevo y se puede eliminar directamente
+    if (!item.item_id) {
+      setItems(items.filter((_, i) => i !== index));
+      setShowConfirmModal(false);
+      setItemToToggle(null);
+      setIndexToToggle(null);
+      toast.success('Servicio eliminado correctamente');
+      return;
+    }
+
+    const nuevoEstado = item.estado === '1' ? '0' : '1';
+    const accion = nuevoEstado === '0' ? 'inactivar' : 'activar';
+    
+    try {
+      await ordenServicioItemService.cambiarEstado(item.item_id, nuevoEstado);
+      
+      // Actualizar en UI
+      const nuevosItems = [...items];
+      nuevosItems[index].estado = nuevoEstado;
+      setItems(nuevosItems);
+      
+      toast.success(`Servicio ${accion === 'inactivar' ? 'inactivado' : 'activado'} correctamente`);
+    } catch (error) {
+      const mensaje = error.response?.data?.message || 'No se pudo cambiar el estado';
+      toast.error(mensaje);
+    } finally {
+      setShowConfirmModal(false);
+      setItemToToggle(null);
+      setIndexToToggle(null);
+    }
   };
 
   const handleEditClick = (index, item) => {
@@ -455,7 +504,14 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 </thead>
                 <tbody>
                   {items.map((item, index) => (
-                    <tr key={index}>
+                    <tr 
+                      key={index}
+                      style={{ 
+                        backgroundColor: item.estado === '0' ? '#f8f9fa' : 'inherit',
+                        opacity: item.estado === '0' ? 0.65 : 1,
+                        textDecoration: item.estado === '0' ? 'line-through' : 'none'
+                      }}
+                    >
                       <td>
                         {item.nombre_servicio}
                         <br />
@@ -549,11 +605,15 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline-danger"
-                              onClick={() => handleEliminarServicio(item.servicio_id)}
-                              title="Eliminar"
+                              variant={item.estado === '1' ? 'outline-warning' : 'outline-success'}
+                              onClick={() => handleCambiarEstadoItem(index, item)}
+                              title={item.estado === '1' ? 'Inactivar servicio' : 'Activar servicio'}
                             >
-                              <i className="fas fa-trash"></i>
+                              {item.estado === '1' ? (
+                                <BiToggleRight size={18} />
+                              ) : (
+                                <BiToggleLeft size={18} />
+                              )}
                             </Button>
                           </div>
                         )}
@@ -612,6 +672,52 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           </div>
         </Form>
       </Card.Body>
+
+      {/* Modal de confirmación para cambiar estado */}
+      <ConfirmModal
+        show={showConfirmModal}
+        onHide={() => {
+          setShowConfirmModal(false);
+          setItemToToggle(null);
+          setIndexToToggle(null);
+        }}
+        onConfirm={handleConfirmToggle}
+        title={
+          !itemToToggle?.item_id
+            ? 'Eliminar Servicio'
+            : itemToToggle?.estado === '1'
+            ? 'Inactivar Servicio'
+            : 'Activar Servicio'
+        }
+        message={
+          !itemToToggle?.item_id
+            ? `¿Está seguro de eliminar el servicio "${itemToToggle?.nombre_servicio}"?`
+            : itemToToggle?.estado === '1'
+            ? `¿Está seguro de inactivar el servicio "${itemToToggle?.nombre_servicio}"?`
+            : `¿Está seguro de activar el servicio "${itemToToggle?.nombre_servicio}"?`
+        }
+        confirmText={
+          !itemToToggle?.item_id
+            ? 'Eliminar'
+            : itemToToggle?.estado === '1'
+            ? 'Inactivar'
+            : 'Activar'
+        }
+        confirmVariant={
+          !itemToToggle?.item_id
+            ? 'danger'
+            : itemToToggle?.estado === '1'
+            ? 'warning'
+            : 'success'
+        }
+        icon={
+          !itemToToggle?.item_id
+            ? 'fa-trash'
+            : itemToToggle?.estado === '1'
+            ? 'fa-toggle-off'
+            : 'fa-toggle-on'
+        }
+      />
     </Card>
   );
 };
