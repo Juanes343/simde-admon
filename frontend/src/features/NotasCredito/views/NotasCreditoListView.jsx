@@ -92,14 +92,20 @@ const NotasCreditoListView = () => {
             
             loadNotas(pagination.current_page);
           } catch (error) {
-            const errorData = error.response?.data;
+            const errorData = error.response?.data || error;
             const errorMessage = errorData?.message || errorData?.error || 'No se pudo procesar la nota electrónica';
             const payload = errorData?.payload;
+            const dataicoResponse = errorData?.data?.respuesta_dataico || errorData?.respuesta_dataico;
 
             Swal.fire({
               title: '✗ Error de Validación',
               html: `<div class="text-start">
                       <p class="text-danger"><b>Mensaje:</b> ${errorMessage}</p>
+                      ${dataicoResponse ? `
+                      <hr />
+                      <p><b>Respuesta DataIco:</b></p>
+                      <pre style="background: #f4f4f4; padding: 10px; font-size: 11px; max-height: 200px; overflow-y: auto;">${typeof dataicoResponse === 'string' ? dataicoResponse : JSON.stringify(dataicoResponse, null, 2)}</pre>
+                      ` : ''}
                       ${payload ? `
                       <hr />
                       <p><b>JSON Enviado (Debug):</b></p>
@@ -107,7 +113,7 @@ const NotasCreditoListView = () => {
                       ` : ''}
                      </div>`,
               icon: 'error',
-              width: '700px'
+              width: '800px'
             });
           }
         }
@@ -429,7 +435,7 @@ const NotasCreditoListView = () => {
                           </>
                         )}
 
-                        {n.respuesta_dataico?.dian_status === 'ERROR' && (
+                        {(n.respuesta_dataico?.dian_status === 'ERROR' || n.respuesta_dataico?.dian_status === 'DIAN_NO_ENVIADO' || n.estado === 'RECHAZADO') && (
                           <Button 
                             size="sm" 
                             variant="warning" 

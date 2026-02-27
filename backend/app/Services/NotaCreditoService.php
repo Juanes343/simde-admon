@@ -6,6 +6,7 @@ use App\Models\NotaCredito;
 use App\Models\NotaCreditoConcepto;
 use App\Models\FacFactura;
 use App\Models\AuditoriaDataIco;
+use App\Models\AuditoriaNotaCredito;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -131,6 +132,34 @@ class NotaCreditoService
             $endpoint = $notaCredito->tipo_nota === 'DEBITO' ? 'debit_notes' : 'credit_notes';
             $result = $this->dataIcoService->sendDocument($payload, $endpoint, $token);
 
+            // 5.1 Registrar o actualizar auditoría
+            $responseData = $result['data'] ?? [];
+            
+            $auditoriaNC = AuditoriaNotaCredito::updateOrCreate(
+                [
+                    'prefijo_siis' => $notaCredito->prefijo,
+                    'nota_credito_siis' => $notaCredito->nota_credito_id,
+                ],
+                [
+                    'json_siis' => $payload,
+                    'dataico_response' => $result,
+                    'dian_status' => $responseData['dian_status'] ?? ($result['success'] ? 'ENVIADO' : 'ERROR'),
+                    'numero' => $responseData['number'] ?? null,
+                    'issue_date' => $responseData['issue_date'] ?? null,
+                    'xml_url' => $responseData['xml_url'] ?? null,
+                    'payment_date' => $responseData['payment_date'] ?? null,
+                    'customer_status' => $responseData['customer_status'] ?? null,
+                    'pdf_url' => $responseData['pdf_url'] ?? null,
+                    'email_status' => $responseData['email_status'] ?? null,
+                    'cufe' => $responseData['cufe'] ?? null,
+                    'uuid' => $responseData['uuid'] ?? null,
+                    'qrcode' => $responseData['qrcode'] ?? null,
+                    'prefix' => $responseData['numbering']['prefix'] ?? null,
+                    'resolution_number' => $responseData['numbering']['resolution_number'] ?? null,
+                    'dian_messages' => isset($responseData['dian_send_error_code']) ? [$responseData['dian_send_error_code']] : null,
+                ]
+            );
+
             // 6. Actualizar estado según respuesta
             if ($result['success']) {
                 $responseData = $result['data'];
@@ -169,7 +198,12 @@ class NotaCreditoService
                 if (is_array($result['errors'])) {
                     $errorDetails = [];
                     foreach ($result['errors'] as $key => $err) {
-                        $errorStr = is_array($err) ? implode(', ', $err) : $err;
+                        if (is_array($err)) {
+                            // Si el error es un array anidado, lo convertimos a JSON para evitar el error "Array to string conversion"
+                            $errorStr = json_encode($err, JSON_UNESCAPED_UNICODE);
+                        } else {
+                            $errorStr = $err;
+                        }
                         $errorDetails[] = "[$key]: $errorStr";
                     }
                     $errorMessage = 'Errores de validación DataIco: ' . implode(' | ', $errorDetails);
@@ -276,17 +310,43 @@ class NotaCreditoService
      */
     protected function buildNotaCreditoItems(NotaCredito $notaCredito, FacFactura $factura)
     {
-        $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
+        $items = [];
         
-        return [
-            [
+        // Si la nota es TOTAL, traemos los items de la factura original
+        if ($notaCredito->alcance === 'TOTAL') {
+            // Cargar los items de la factura con sus detalles
+            $factura->load('items.ordenServicioItem');
+            
+            if ($factura->items && $factura->items->count() > 0) {
+                foreach ($factura->items as $facItem) {
+                    $osItem = $facItem->ordenServicioItem;
+                    if ($osItem) {
+                        $items[] = [
+                            'sku' => $osItem->cargo ?? 'ITEM',
+                            'description' => $osItem->descripcion ?? 'Item de factura',
+                            'quantity' => (float) ($osItem->cantidad ?? 1),
+                            'price' => (float) ($osItem->valor ?? 0),
+                            'original_price' => (float) ($osItem->valor ?? 0),
+                        ];
+                    }
+                }
+            }
+        }
+        
+        // Si no se encontraron items (o es PARCIAL y no se ha implementado la lógica de items parciales),
+        // enviamos un item genérico por el valor total de la nota
+        if (empty($items)) {
+            $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
+            $items[] = [
                 'sku' => $notaCredito->prefijo . $notaCredito->nota_credito_id,
                 'description' => $notaCredito->concepto->descripcion ?? $descripcion,
                 'quantity' => 1,
                 'price' => (float) $notaCredito->valor_nota,
                 'original_price' => (float) $notaCredito->valor_nota,
-            ],
-        ];
+            ];
+        }
+        
+        return $items;
     }
 
     /**
