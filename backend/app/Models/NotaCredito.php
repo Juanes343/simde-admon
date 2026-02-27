@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Documento;
 
 class NotaCredito extends Model
 {
@@ -21,6 +22,8 @@ class NotaCredito extends Model
         'tercero_id',
         'tipo_factura',
         'estado',
+        'tipo_nota',
+        'alcance',
         'cufe',
         'uuid',
         'fecha_envio',
@@ -87,10 +90,24 @@ class NotaCredito extends Model
     }
 
     /**
-     * Genera el número de nota crédito siguiendo secuencia
+     * Genera el número de nota crédito siguiendo secuencia desde la tabla documentos
      */
     public static function generarSiguienteNumero($empresaId, $prefijo)
     {
+        // Buscar el documento correspondiente al prefijo y empresa
+        $documento = Documento::where('empresa_id', $empresaId)
+                              ->where('prefijo', $prefijo)
+                              ->first();
+
+        if ($documento) {
+            // Incrementar la numeración en el documento
+            $documento->numeracion += 1;
+            $documento->save();
+            
+            return $documento->numeracion;
+        }
+
+        // Fallback por si no existe el documento (aunque debería existir)
         $ultima = self::where('empresa_id', $empresaId)
                       ->where('prefijo', $prefijo)
                       ->orderByDesc('nota_credito_id')

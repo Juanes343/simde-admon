@@ -34,7 +34,7 @@ class NotaCreditoService
                                   ->where('factura_fiscal', $data['factura_fiscal'])
                                   ->firstOrFail();
 
-            // 2. Generar número siguiente
+            // 2. Generar número siguiente (esto también actualiza la tabla documentos)
             $numeroNC = NotaCredito::generarSiguienteNumero(
                 $data['empresa_id'],
                 $data['prefijo']
@@ -47,14 +47,26 @@ class NotaCreditoService
                 'nota_credito_id' => $numeroNC,
                 'prefijo_factura' => $data['prefijo_factura'],
                 'factura_fiscal' => $data['factura_fiscal'],
-                'concepto_id' => $data['concepto_id'],
+                'concepto_id' => $data['concepto_id'] ?? 1, // Valor por defecto si no viene
                 'valor_nota' => $data['valor_nota'],
                 'observacion' => $data['observacion'] ?? null,
                 'tipo_id_tercero' => $factura->tipo_id_tercero,
                 'tercero_id' => $factura->tercero_id,
                 'tipo_factura' => $factura->tipo_factura,
                 'estado' => 'PENDIENTE',
+                'tipo_nota' => $data['tipo_nota'] ?? 'CREDITO',
+                'alcance' => $data['alcance'] ?? 'TOTAL',
             ]);
+
+            // 4. Guardar items de la nota crédito si existen
+            if (isset($data['items']) && is_array($data['items'])) {
+                foreach ($data['items'] as $item) {
+                    // Aquí deberías guardar los items en la tabla correspondiente
+                    // Ejemplo: NotaCreditoDetalle::create([...])
+                    // Por ahora solo lo registramos en el log
+                    Log::info("Item de nota crédito: ", $item);
+                }
+            }
 
             return [
                 'success' => true,
@@ -91,14 +103,23 @@ class NotaCreditoService
                                   ->firstOrFail();
 
             // 3. Obtener auditoría de la factura (CUFE)
-            $auditoria = AuditoriaDataIco::where('prefijo_siis', $notaCredito->prefijo_factura)
-                                          ->where('factura_siis', $notaCredito->factura_fiscal)
+            // La tabla fe_auditoria_dataico se relaciona con fac_facturas a través de factura_fiscal_id (que es el ID interno de la factura, no el número de factura)
+            $auditoria = AuditoriaDataIco::where('prefijo', $notaCredito->prefijo_factura)
+                                          ->where('factura_fiscal_id', $factura->factura_fiscal_id)
                                           ->first();
 
             if (!$auditoria) {
                 return [
                     'success' => false,
                     'message' => 'No se encontró información de factura electrónica referenciada',
+                    'payload' => [
+                        'error_interno' => 'No se encontró el registro en fe_auditoria_dataico',
+                        'parametros_busqueda' => [
+                            'prefijo' => $notaCredito->prefijo_factura,
+                            'factura_fiscal_id' => $factura->factura_fiscal_id,
+                            'numero_factura' => $notaCredito->factura_fiscal
+                        ]
+                    ]
                 ];
             }
 
@@ -107,7 +128,8 @@ class NotaCreditoService
 
             // 5. Enviar a DATAICO
             $token = config('services.dataico.token');
-            $result = $this->dataIcoService->sendDocument($payload, 'credit_notes', $token);
+            $endpoint = $notaCredito->tipo_nota === 'DEBITO' ? 'debit_notes' : 'credit_notes';
+            $result = $this->dataIcoService->sendDocument($payload, $endpoint, $token);
 
             // 6. Actualizar estado según respuesta
             if ($result['success']) {
@@ -142,11 +164,26 @@ class NotaCreditoService
                 'respuesta_dataico' => $result,
             ]);
 
+            $errorMessage = $result['message'] ?? 'Error al enviar nota crédito';
+            if (!empty($result['errors'])) {
+                if (is_array($result['errors'])) {
+                    $errorDetails = [];
+                    foreach ($result['errors'] as $key => $err) {
+                        $errorStr = is_array($err) ? implode(', ', $err) : $err;
+                        $errorDetails[] = "[$key]: $errorStr";
+                    }
+                    $errorMessage = 'Errores de validación DataIco: ' . implode(' | ', $errorDetails);
+                } else {
+                    $errorMessage = 'Errores de validación DataIco: ' . $result['errors'];
+                }
+            }
+
             return [
                 'success' => false,
-                'message' => $result['message'] ?? 'Error al enviar nota crédito',
+                'message' => $errorMessage,
                 'errors' => $result['errors'] ?? [],
                 'data' => $notaCredito,
+                'payload' => $payload
             ];
 
         } catch (\Exception $e) {
@@ -187,16 +224,26 @@ class NotaCreditoService
             'family_name' => (string) ($tercero->primer_apellido ?? 'x'),
         ];
 
-        // Construir objeto credit_note
-        $creditNoteData = [
-            'env' => config('services.dataico.tipo_envio', 'PRODUCCION'),
+        $tipoEnvio = config('services.dataico.tipo_envio', 'PRODUCCION');
+        
+        if ($tipoEnvio === 'PRUEBAS') {
+            $prefijo = $notaCredito->tipo_nota === 'DEBITO' 
+                ? config('services.dataico.prefijo_pruebas_nd', 'NDSETT') 
+                : config('services.dataico.prefijo_pruebas_nc', 'NCSET');
+        } else {
+            $prefijo = $notaCredito->prefijo;
+        }
+
+        // Construir objeto credit_note o debit_note
+        $documentData = [
+            'env' => $tipoEnvio,
             'dataico_account_id' => config('services.dataico.dataico_account_id'),
             'invoice_id' => $auditoria->uuid ?? '',
             'number' => (int) $notaCredito->nota_credito_id,
             'issue_date' => $notaCredito->created_at->format('d/m/Y H:i:s'),
             'reason' => 'OTROS',
             'numbering' => [
-                'prefix' => $notaCredito->prefijo,
+                'prefix' => $prefijo,
                 'flexible' => true,
             ],
             'customer' => $customerData,
@@ -210,27 +257,31 @@ class NotaCreditoService
 
         // Agregar health solo si tipo_factura NO es 5 (Conceptos)
         if ($factura->tipo_factura != '5') {
-            $creditNoteData['health'] = $this->buildHealthObject($factura);
+            $documentData['health'] = $this->buildHealthObject($factura);
         }
+
+        $payloadKey = $notaCredito->tipo_nota === 'DEBITO' ? 'debit_note' : 'credit_note';
 
         return [
             'actions' => [
                 'send_dian' => true,
                 'send_email' => true,
             ],
-            'credit_note' => $creditNoteData,
+            $payloadKey => $documentData,
         ];
     }
 
     /**
-     * Construir items de nota crédito
+     * Construir items de nota crédito o débito
      */
     protected function buildNotaCreditoItems(NotaCredito $notaCredito, FacFactura $factura)
     {
+        $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
+        
         return [
             [
                 'sku' => $notaCredito->prefijo . $notaCredito->nota_credito_id,
-                'description' => $notaCredito->concepto->descripcion ?? 'NOTA CRÉDITO',
+                'description' => $notaCredito->concepto->descripcion ?? $descripcion,
                 'quantity' => 1,
                 'price' => (float) $notaCredito->valor_nota,
                 'original_price' => (float) $notaCredito->valor_nota,

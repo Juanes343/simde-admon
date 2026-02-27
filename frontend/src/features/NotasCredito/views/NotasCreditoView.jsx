@@ -1,441 +1,649 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Table, Button, Form, Row, Col, Badge, Spinner, Alert } from 'react-bootstrap';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import facturacionService from '../../../services/facturacionService';
-import notasCreditoService from '../../../services/notaCreditoService';
-import { formatCurrency } from '../../../utils/formatters';
+import {
+  Card,
+  Row,
+  Col,
+  Form,
+  Button,
+  Table,
+  Badge,
+  Alert,
+  InputGroup,
+} from 'react-bootstrap';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import {
+  faPlus,
+  faCheckCircle,
+  faTimesCircle,
+  faSpinner,
+  faArrowLeft,
+  faSearch,
+  faFileInvoice,
+  faList,
+  faCog,
+  faMoneyBillWave
+} from '@fortawesome/free-solid-svg-icons';
 import Swal from 'sweetalert2';
+import notaCreditoService from '../../../services/notaCreditoService';
+import facturacionService from '../../../services/facturacionService';
+import { formatCurrency } from '../../../utils/formatters';
 
 const NotasCreditoView = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [loadingFacturas, setLoadingFacturas] = useState(false);
+  
+  // Estados principales
+  const [prefijos, setPrefijos] = useState([]);
+  const [conceptos, setConceptos] = useState([]);
   const [facturas, setFacturas] = useState([]);
-  const [pagination, setPagination] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [empresaId, setEmpresaId] = useState('01');
+
+  // Estados del formulario
+  const [tipoNota, setTipoNota] = useState('CREDITO');
+  const [prefijoSeleccionado, setPrefijoSeleccionado] = useState('');
+  const [alcance, setAlcance] = useState('TOTAL');
+  const [conceptoId, setConceptoId] = useState('');
+  const [observacion, setObservacion] = useState('');
+
+  // Estados de selección
+  const [facturaFilters, setFacturaFilters] = useState({
+    fechaDesde: '',
+    fechaHasta: '',
+    tercero: '',
+  });
   const [selectedFactura, setSelectedFactura] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [itemAmounts, setItemAmounts] = useState({});
-  const [conceptos, setConceptos] = useState([]);
-  const [conceptoId, setConceptoId] = useState('');
-  const [prefijo, setPrefijo] = useState('');
-  const [observacion, setObservacion] = useState('');
-  const [tipoNota, setTipoNota] = useState('CREDITO');
-  const [alcance, setAlcance] = useState('TOTAL');
-  const [filters, setFilters] = useState({
-    lapso_inicio: '',
-    lapso_fin: '',
-    tercero: ''
-  });
 
+  // Cargar catálogos al montar
   useEffect(() => {
-    loadConceptos();
+    cargarCatalogos();
   }, []);
 
+  // Recargar prefijos cuando cambia el tipo de nota
   useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      loadFacturas(1);
-    }, 400);
+    if (tipoNota) {
+      cargarPrefijos();
+    }
+  }, [tipoNota]);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [filters]);
-
+  // Auto-seleccionar items cuando cambia alcance
   useEffect(() => {
     if (!selectedFactura) return;
 
-    const items = getFacturaItems(selectedFactura);
     if (alcance === 'TOTAL') {
-      const itemIds = items.map((i) => i.item_id);
+      const items = selectedFactura.items || [];
+      const itemIds = items.map((item) => item.item_id || item.id);
       setSelectedItems(itemIds);
 
       const amounts = {};
       items.forEach((item) => {
-        const osItem = getOrdenServicioItem(item);
-        amounts[item.item_id] = getItemSubtotal(osItem);
+        const itemId = item.item_id || item.id;
+        const subtotal = item.orden_servicio_item?.subtotal || item.subtotal || (item.valor_unitario * item.cantidad);
+        amounts[itemId] = parseFloat(subtotal) || 0;
       });
       setItemAmounts(amounts);
+    } else {
+      setSelectedItems([]);
+      setItemAmounts({});
     }
   }, [alcance, selectedFactura]);
 
-  const loadConceptos = async () => {
-    try {
-      const data = await notasCreditoService.getConceptos();
-      setConceptos(data);
-      if (data.length > 0) {
-        setConceptoId(data[0].concepto_id || data[0].id || '');
-      }
-    } catch (error) {
-      Swal.fire('Error', 'No se pudieron cargar los conceptos de nota credito', 'error');
-    }
-  };
-
-  const loadFacturas = async (page = 1) => {
-    setLoadingFacturas(true);
-    try {
-      const data = await facturacionService.getFacturas(page, filters);
-      setFacturas(data.data || []);
-      setPagination({
-        current_page: data.current_page,
-        last_page: data.last_page,
-        total: data.total
-      });
-    } catch (error) {
-      Swal.fire('Error', 'No se pudieron cargar las facturas', 'error');
-    } finally {
-      setLoadingFacturas(false);
-    }
-  };
-
-  const getFacturaItems = (factura) => factura?.items || [];
-
-  const getOrdenServicioItem = (item) => item?.ordenServicioItem || item?.orden_servicio_item || null;
-
-  const getItemSubtotal = (osItem) => {
-    if (!osItem) return 0;
-    const subtotal = osItem.subtotal ?? (osItem.precio_unitario || 0) * (osItem.cantidad || 1);
-    return Number(subtotal) || 0;
-  };
-
-  const handleSelectFactura = (factura) => {
-    setSelectedFactura(factura);
-    setSelectedItems([]);
-    setItemAmounts({});
-  };
-
-  const handleSelectItem = (itemId) => {
-    if (alcance === 'TOTAL') return;
-
-    if (selectedItems.includes(itemId)) {
-      setSelectedItems(selectedItems.filter((id) => id !== itemId));
-      const newAmounts = { ...itemAmounts };
-      delete newAmounts[itemId];
-      setItemAmounts(newAmounts);
-    } else {
-      setSelectedItems([...selectedItems, itemId]);
-
-      const item = getFacturaItems(selectedFactura).find((i) => i.item_id === itemId);
-      const osItem = getOrdenServicioItem(item);
-      const subtotal = getItemSubtotal(osItem);
-      setItemAmounts({
-        ...itemAmounts,
-        [itemId]: subtotal
-      });
-    }
-  };
-
-  const handleAmountChange = (itemId, value) => {
-    setItemAmounts({
-      ...itemAmounts,
-      [itemId]: Number(value) || 0
-    });
-  };
-
-  const totalNota = useMemo(() => {
-    return selectedItems.reduce((sum, itemId) => {
-      return sum + (Number(itemAmounts[itemId]) || 0);
-    }, 0);
-  }, [selectedItems, itemAmounts]);
-
-  const handleCrearNota = async () => {
-    if (tipoNota === 'DEBITO') {
-      return Swal.fire('En desarrollo', 'El envio de notas debito aun no esta habilitado en el backend.', 'info');
-    }
-
-    if (!selectedFactura) return Swal.fire('Atencion', 'Seleccione una factura', 'warning');
-    if (!prefijo) return Swal.fire('Atencion', 'Ingrese el prefijo de la nota', 'warning');
-    if (!conceptoId) return Swal.fire('Atencion', 'Seleccione un concepto', 'warning');
-    if (selectedItems.length === 0) return Swal.fire('Atencion', 'Seleccione al menos un item', 'warning');
-    if (totalNota <= 0) return Swal.fire('Atencion', 'El valor de la nota debe ser mayor a 0', 'warning');
-
-    const result = await Swal.fire({
-      title: 'Crear Nota Credito?',
-      text: `Se creara una nota credito ${alcance.toLowerCase()} por ${formatCurrency(totalNota)}.`,
-      icon: 'question',
-      showCancelButton: true,
-      confirmButtonText: 'Si, Crear',
-      cancelButtonText: 'Cancelar'
-    });
-
-    if (!result.isConfirmed) return;
-
+  const cargarCatalogos = async () => {
     try {
       setLoading(true);
-      const userData = JSON.parse(localStorage.getItem('user') || '{}');
+      const [conceptosRes, prefijoRes] = await Promise.all([
+        notaCreditoService.getConceptos(empresaId),
+        notaCreditoService.getPrefijos(empresaId, 'C'),
+      ]);
 
-      const payload = {
-        empresa_id: userData.empresa_id || userData.id_empresa || 1,
-        prefijo,
-        prefijo_factura: selectedFactura.prefijo,
-        factura_fiscal: selectedFactura.factura_fiscal,
-        concepto_id: conceptoId,
-        valor_nota: totalNota,
-        observacion,
-        tipo_nota: tipoNota,
-        alcance,
-        items: selectedItems.map((id) => ({
-          item_id: id,
-          valor: Number(itemAmounts[id]) || 0
-        }))
-      };
-
-      const response = await notasCreditoService.crearNota(payload);
-
-      Swal.fire({
-        title: 'Nota creada',
-        text: response?.message || 'Nota credito creada correctamente.',
-        icon: 'success'
-      });
-
-      setSelectedFactura(null);
-      setSelectedItems([]);
-      setItemAmounts({});
-      setObservacion('');
+      if (conceptosRes.success || Array.isArray(conceptosRes)) {
+        setConceptos(conceptosRes.data || conceptosRes);
+      }
+      if (prefijoRes.success || Array.isArray(prefijoRes)) {
+        const data = prefijoRes.data || prefijoRes;
+        setPrefijos(data);
+        if (data.length > 0) {
+          setPrefijoSeleccionado(data[0].prefijo);
+        }
+      }
     } catch (error) {
-      Swal.fire('Error', error.response?.data?.message || 'No se pudo crear la nota', 'error');
+      console.error('Error cargando catálogos:', error);
+      Swal.fire('Error', 'No se pudieron cargar los catálogos', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const cargarPrefijos = async () => {
+    try {
+      const tipo = tipoNota === 'DEBITO' ? 'D' : 'C';
+      const res = await notaCreditoService.getPrefijos(empresaId, tipo);
+      if (res.success || Array.isArray(res)) {
+        const data = res.data || res;
+        setPrefijos(data);
+        if (data.length > 0 && !prefijoSeleccionado) {
+          setPrefijoSeleccionado(data[0].prefijo);
+        }
+      }
+    } catch (error) {
+      console.error('Error cargando prefijos:', error);
+    }
+  };
+
+  const cargarFacturas = async () => {
+    try {
+      setLoading(true);
+      const filtros = {
+        empresa_id: empresaId,
+        ...facturaFilters,
+      };
+      const res = await facturacionService.getFacturas(filtros);
+      
+      let facturasData = [];
+      if (res.data && Array.isArray(res.data.data)) {
+        facturasData = res.data.data;
+      } else if (res.data && Array.isArray(res.data)) {
+        facturasData = res.data;
+      } else if (Array.isArray(res)) {
+        facturasData = res;
+      }
+      
+      setFacturas(facturasData);
+      
+      if (facturasData.length === 0) {
+        Swal.fire('Información', 'No se encontraron facturas con los filtros aplicados', 'info');
+      }
+    } catch (error) {
+      console.error('Error cargando facturas:', error);
+      Swal.fire('Error', 'No se pudieron cargar las facturas', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectFactura = (factura) => {
+    setSelectedFactura({
+      ...factura,
+      numero: factura.factura_fiscal || factura.numero,
+      tercero_nombre: factura.tercero?.nombre_tercero || factura.tercero_nombre,
+      valor_total: parseFloat(factura.total_factura || factura.valor_total || 0),
+      fecha: factura.fecha_registro ? factura.fecha_registro.split('T')[0] : factura.fecha,
+      items: factura.items || factura.items_lista || [],
+    });
+  };
+
+  const handleSelectItem = (itemId) => {
+    if (alcance === 'TOTAL') return;
+
+    setSelectedItems((prev) => {
+      if (prev.includes(itemId)) {
+        return prev.filter((id) => id !== itemId);
+      } else {
+        return [...prev, itemId];
+      }
+    });
+  };
+
+  const handleChangeItemAmount = (itemId, value) => {
+    setItemAmounts((prev) => ({
+      ...prev,
+      [itemId]: parseFloat(value) || 0,
+    }));
+  };
+
+  const totalNota = useMemo(() => {
+    if (!selectedFactura) return 0;
+    if (alcance === 'TOTAL') {
+      return selectedFactura.valor_total || 0;
+    }
+    return Object.values(itemAmounts).reduce((sum, val) => sum + val, 0);
+  }, [selectedFactura, alcance, itemAmounts]);
+
+  const handleCrearNota = async () => {
+    if (!prefijoSeleccionado) {
+      Swal.fire('Validación', 'Debe seleccionar un prefijo', 'warning');
+      return;
+    }
+    if (!selectedFactura) {
+      Swal.fire('Validación', 'Debe seleccionar una factura', 'warning');
+      return;
+    }
+    if (selectedItems.length === 0) {
+      Swal.fire('Validación', 'Debe seleccionar al menos un item', 'warning');
+      return;
+    }
+    if (totalNota <= 0) {
+      Swal.fire('Validación', 'El valor de la nota debe ser mayor a 0', 'warning');
+      return;
+    }
+
+    const result = await Swal.fire({
+      title: '¿Crear Nota Crédito?',
+      html: `<div style="text-align: left;">
+        <p><strong>Factura:</strong> ${selectedFactura.prefijo}-${selectedFactura.numero}</p>
+        <p><strong>Tercero:</strong> ${selectedFactura.tercero_nombre}</p>
+        <p><strong>Items:</strong> ${selectedItems.length}</p>
+        <p><strong>Valor Total:</strong> ${formatCurrency(totalNota)}</p>
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Crear',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#0d6efd',
+    });
+
+    if (result.isConfirmed) {
+      await enviarNota();
+    }
+  };
+
+  const enviarNota = async () => {
+    try {
+      const items = selectedItems.map((itemId) => ({
+        item_id: itemId,
+        valor: itemAmounts[itemId] || 0,
+      }));
+
+      const payload = {
+        empresa_id: empresaId,
+        prefijo: prefijoSeleccionado,
+        prefijo_factura: selectedFactura.prefijo,
+        factura_fiscal: selectedFactura.numero,
+        concepto_id: conceptoId || 1, // Enviamos 1 por defecto si no hay concepto seleccionado
+        valor_nota: totalNota,
+        observacion: observacion,
+        tipo_nota: tipoNota,
+        alcance: alcance,
+        items: items,
+      };
+
+      Swal.fire({
+        title: 'Creando nota crédito...',
+        html: '<p>Por favor espere...</p>',
+        icon: 'info',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: async () => {
+          Swal.showLoading();
+          try {
+            const res = await notaCreditoService.crearNota(payload);
+            if (res.success) {
+              Swal.fire('Exitoso', 'Nota crédito creada correctamente', 'success').then(() => {
+                resetForm();
+              });
+            } else {
+              Swal.fire('Error', res.message || 'Error al crear la nota', 'error');
+            }
+          } catch (error) {
+            Swal.fire('Error', error.message, 'error');
+          }
+        },
+      });
+    } catch (error) {
+      Swal.fire('Error', error.message, 'error');
+    }
+  };
+
+  const resetForm = () => {
+    setTipoNota('CREDITO');
+    setAlcance('TOTAL');
+    setConceptoId('');
+    setObservacion('');
+    setSelectedFactura(null);
+    setSelectedItems([]);
+    setItemAmounts({});
+    setFacturaFilters({ fechaDesde: '', fechaHasta: '', tercero: '' });
+    setFacturas([]);
+    cargarPrefijos();
+  };
+
   return (
-    <div className="container-fluid py-4">
-      <Card className="shadow-sm mb-4">
-        <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">Notas Credito / Debito</h5>
-          <div>
-            <Button variant="light" size="sm" className="me-2" onClick={() => navigate('/notas-historico')}>
-              <i className="fas fa-list me-2"></i>Ver Historico
-            </Button>
-            <Button variant="light" size="sm" onClick={() => navigate('/dashboard')}>
-              <i className="fas fa-arrow-left me-2"></i>Volver al Dashboard
-            </Button>
-          </div>
-        </Card.Header>
-        <Card.Body>
-          <Form className="mb-3">
-            <Row className="align-items-end">
-              <Col md={3}>
-                <Form.Group>
-                  <Form.Label>Tipo de Nota</Form.Label>
-                  <Form.Select value={tipoNota} onChange={(e) => setTipoNota(e.target.value)}>
-                    <option value="CREDITO">Credito</option>
-                    <option value="DEBITO">Debito</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={3}>
-                <Form.Group>
-                  <Form.Label>Alcance</Form.Label>
-                  <Form.Select value={alcance} onChange={(e) => setAlcance(e.target.value)}>
-                    <option value="TOTAL">Total</option>
-                    <option value="PARCIAL">Parcial</option>
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={3}>
-                <Form.Group>
-                  <Form.Label>Prefijo Nota</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={prefijo}
-                    onChange={(e) => setPrefijo(e.target.value)}
-                    placeholder="Ej: NC"
-                  />
-                </Form.Group>
-              </Col>
-              <Col md={3}>
-                <Form.Group>
-                  <Form.Label>Concepto</Form.Label>
-                  <Form.Select value={conceptoId} onChange={(e) => setConceptoId(e.target.value)}>
-                    <option value="">Seleccione...</option>
-                    {conceptos.map((c) => (
-                      <option key={c.concepto_id || c.id} value={c.concepto_id || c.id}>
-                        {c.descripcion || c.nombre}
-                      </option>
-                    ))}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
-            <Row className="mt-3">
-              <Col md={12}>
-                <Form.Group>
-                  <Form.Label>Observacion</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    value={observacion}
-                    onChange={(e) => setObservacion(e.target.value)}
-                    placeholder="Detalle u observaciones de la nota"
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-          </Form>
+    <div className="p-4">
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h2 className="mb-0 text-primary">
+          <FontAwesomeIcon icon={faPlus} className="me-2" />
+          Crear Nota Crédito/Débito
+        </h2>
+        <Button variant="outline-secondary" onClick={() => navigate(-1)}>
+          <FontAwesomeIcon icon={faArrowLeft} className="me-2" />
+          Volver
+        </Button>
+      </div>
 
-          {tipoNota === 'DEBITO' && (
-            <Alert variant="warning">
-              El envio de notas debito aun no esta habilitado en el backend. Puedes continuar con notas credito.
-            </Alert>
-          )}
+      {tipoNota === 'DEBITO' && (
+        <Alert variant="warning" dismissible>
+          <strong>Advertencia:</strong> El envío de notas débito aún no está habilitado
+        </Alert>
+      )}
 
-          <Card className="mb-4">
-            <Card.Header className="bg-light">
-              <strong>Seleccionar Factura</strong>
+      <Row>
+        <Col lg={8}>
+          <Card className="mb-4 shadow-sm">
+            <Card.Header className="bg-primary text-white">
+              <h5 className="mb-0"><FontAwesomeIcon icon={faCog} className="me-2" />Configuración</h5>
             </Card.Header>
             <Card.Body>
-              <Form className="mb-3">
-                <Row className="align-items-end">
-                  <Col md={3}>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold">Tipo de Nota</Form.Label>
+                    <Form.Select
+                      value={tipoNota}
+                      onChange={(e) => setTipoNota(e.target.value)}
+                      className="bg-light"
+                    >
+                      <option value="CREDITO">Nota Crédito</option>
+                      <option value="DEBITO">Nota Débito</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold">Prefijo</Form.Label>
+                    <Form.Select
+                      value={prefijoSeleccionado}
+                      onChange={(e) => setPrefijoSeleccionado(e.target.value)}
+                      disabled={prefijos.length === 0}
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      {prefijos.map((p) => (
+                        <option key={p.documento_id || p.prefijo} value={p.prefijo}>
+                          {p.prefijo} - {p.descripcion}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold">Alcance</Form.Label>
+                    <Form.Select
+                      value={alcance}
+                      onChange={(e) => setAlcance(e.target.value)}
+                    >
+                      <option value="TOTAL">Total</option>
+                      <option value="PARCIAL">Parcial</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-bold">Concepto</Form.Label>
+                    <Form.Select
+                      value={conceptoId}
+                      onChange={(e) => setConceptoId(e.target.value)}
+                    >
+                      <option value="">-- Seleccionar --</option>
+                      {conceptos.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.descripcion}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-bold">Observación</Form.Label>
+                <Form.Control
+                  as="textarea"
+                  rows={2}
+                  value={observacion}
+                  onChange={(e) => setObservacion(e.target.value)}
+                  placeholder="Notas adicionales..."
+                />
+              </Form.Group>
+            </Card.Body>
+          </Card>
+
+          {!selectedFactura ? (
+            <Card className="mb-4 shadow-sm border-info">
+              <Card.Header className="bg-info text-white">
+                <h5 className="mb-0"><FontAwesomeIcon icon={faSearch} className="me-2" />Buscar Factura</h5>
+              </Card.Header>
+              <Card.Body>
+                <Row className="mb-3">
+                  <Col md={4}>
                     <Form.Group>
                       <Form.Label>Desde</Form.Label>
                       <Form.Control
                         type="date"
-                        value={filters.lapso_inicio}
-                        onChange={(e) => setFilters({ ...filters, lapso_inicio: e.target.value })}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col md={3}>
-                    <Form.Group>
-                      <Form.Label>Hasta</Form.Label>
-                      <Form.Control
-                        type="date"
-                        value={filters.lapso_fin}
-                        onChange={(e) => setFilters({ ...filters, lapso_fin: e.target.value })}
+                        value={facturaFilters.fechaDesde}
+                        onChange={(e) => setFacturaFilters({ ...facturaFilters, fechaDesde: e.target.value })}
                       />
                     </Form.Group>
                   </Col>
                   <Col md={4}>
                     <Form.Group>
-                      <Form.Label>Tercero (Nombre/NIT)</Form.Label>
+                      <Form.Label>Hasta</Form.Label>
                       <Form.Control
-                        type="text"
-                        placeholder="Buscar cliente..."
-                        value={filters.tercero}
-                        onChange={(e) => setFilters({ ...filters, tercero: e.target.value })}
+                        type="date"
+                        value={facturaFilters.fechaHasta}
+                        onChange={(e) => setFacturaFilters({ ...facturaFilters, fechaHasta: e.target.value })}
                       />
                     </Form.Group>
                   </Col>
-                  <Col md={2}>
-                    <Button variant="outline-primary" className="w-100" onClick={() => loadFacturas(1)}>
-                      <i className="fas fa-search me-2"></i>Buscar
-                    </Button>
+                  <Col md={4}>
+                    <Form.Group>
+                      <Form.Label>Tercero / Factura</Form.Label>
+                      <Form.Control
+                        type="text"
+                        placeholder="Buscar..."
+                        value={facturaFilters.tercero}
+                        onChange={(e) => setFacturaFilters({ ...facturaFilters, tercero: e.target.value })}
+                        onKeyDown={(e) => e.key === 'Enter' && cargarFacturas()}
+                      />
+                    </Form.Group>
                   </Col>
                 </Row>
-              </Form>
 
-              {loadingFacturas ? (
-                <div className="text-center py-4">
-                  <Spinner animation="border" variant="primary" />
-                </div>
-              ) : (
-                <Table responsive striped hover size="sm">
-                  <thead className="table-dark">
-                    <tr>
-                      <th>Factura</th>
-                      <th>Fecha</th>
-                      <th>Tercero</th>
-                      <th className="text-end">Total</th>
-                      <th className="text-center">Accion</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facturas.length > 0 ? (
-                      facturas.map((f) => (
-                        <tr key={f.factura_fiscal_id} className={selectedFactura?.factura_fiscal_id === f.factura_fiscal_id ? 'table-primary' : ''}>
-                          <td><strong>{f.prefijo} {f.factura_fiscal}</strong></td>
-                          <td>{new Date(f.fecha_registro).toLocaleDateString('es-CO')}</td>
-                          <td>
-                            <div className="fw-bold">{f.tercero?.nombre_tercero || 'N/A'}</div>
-                            <small className="text-muted">{f.tipo_id_tercero} {f.tercero_id}</small>
-                          </td>
-                          <td className="text-end fw-bold">{formatCurrency(f.total_factura)}</td>
-                          <td className="text-center">
-                            <Button
-                              size="sm"
-                              variant={selectedFactura?.factura_fiscal_id === f.factura_fiscal_id ? 'secondary' : 'primary'}
-                              onClick={() => handleSelectFactura(f)}
-                            >
-                              {selectedFactura?.factura_fiscal_id === f.factura_fiscal_id ? 'Seleccionada' : 'Seleccionar'}
-                            </Button>
-                          </td>
-                        </tr>
-                      ))
+                <div className="d-flex justify-content-end mb-3">
+                  <Button variant="primary" onClick={cargarFacturas} disabled={loading}>
+                    {loading ? (
+                      <><FontAwesomeIcon icon={faSpinner} spin className="me-2" /> Buscando...</>
                     ) : (
-                      <tr>
-                        <td colSpan="5" className="text-center py-3">No se encontraron facturas.</td>
-                      </tr>
+                      <><FontAwesomeIcon icon={faSearch} className="me-2" /> Buscar</>
                     )}
-                  </tbody>
-                </Table>
-              )}
-            </Card.Body>
-          </Card>
+                  </Button>
+                </div>
 
-          {selectedFactura && (
-            <Card className="mb-4">
-              <Card.Header className="bg-light d-flex justify-content-between align-items-center">
-                <strong>Items de la Factura</strong>
-                <Badge bg={alcance === 'TOTAL' ? 'success' : 'info'}>{alcance}</Badge>
+                {facturas.length > 0 && (
+                  <div className="table-responsive">
+                    <Table striped bordered hover size="sm" className="align-middle">
+                      <thead className="table-light">
+                        <tr>
+                          <th>Factura</th>
+                          <th>Tercero</th>
+                          <th>Fecha</th>
+                          <th className="text-end">Valor</th>
+                          <th className="text-center">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {facturas.map((factura) => {
+                          const numFactura = factura.factura_fiscal || factura.numero;
+                          const nombreTercero = factura.tercero?.nombre_tercero || factura.tercero_nombre;
+                          const valorTotal = factura.total_factura || factura.valor_total;
+                          const fecha = factura.fecha_registro ? factura.fecha_registro.split('T')[0] : factura.fecha;
+                          
+                          return (
+                            <tr key={factura.factura_fiscal_id || factura.id}>
+                              <td className="fw-bold text-primary">{factura.prefijo}-{numFactura}</td>
+                              <td>{nombreTercero}</td>
+                              <td>{fecha}</td>
+                              <td className="text-end">{formatCurrency(valorTotal)}</td>
+                              <td className="text-center">
+                                <Button variant="success" size="sm" onClick={() => handleSelectFactura(factura)} title="Seleccionar Factura">
+                                  <FontAwesomeIcon icon={faCheckCircle} />
+                                </Button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
+              </Card.Body>
+            </Card>
+          ) : (
+            <Card className="mb-4 shadow-sm border-success">
+              <Card.Header className="bg-success text-white d-flex justify-content-between align-items-center">
+                <h5 className="mb-0"><FontAwesomeIcon icon={faFileInvoice} className="me-2" />Factura Seleccionada</h5>
+                <Badge bg="light" text="dark" className="fs-6">
+                  {selectedFactura.prefijo}-{selectedFactura.numero}
+                </Badge>
               </Card.Header>
               <Card.Body>
-                <Table responsive striped hover size="sm">
-                  <thead className="table-dark">
-                    <tr>
-                      <th>Sel</th>
-                      <th>Descripcion</th>
-                      <th>Cantidad</th>
-                      <th className="text-end">Subtotal</th>
-                      <th className="text-end">Valor Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {getFacturaItems(selectedFactura).map((item) => {
-                      const osItem = getOrdenServicioItem(item);
-                      const subtotal = getItemSubtotal(osItem);
-                      const checked = selectedItems.includes(item.item_id);
-                      return (
-                        <tr key={item.item_id}>
-                          <td>
-                            <Form.Check
-                              type="checkbox"
-                              checked={checked}
-                              disabled={alcance === 'TOTAL'}
-                              onChange={() => handleSelectItem(item.item_id)}
-                            />
-                          </td>
-                          <td>{osItem?.nombre_servicio || osItem?.descripcion || 'Servicio'}</td>
-                          <td>{osItem?.cantidad || 1}</td>
-                          <td className="text-end">{formatCurrency(subtotal)}</td>
-                          <td className="text-end">
-                            <Form.Control
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={itemAmounts[item.item_id] ?? (alcance === 'TOTAL' ? subtotal : 0)}
-                              disabled={!checked}
-                              onChange={(e) => handleAmountChange(item.item_id, e.target.value)}
-                            />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </Table>
+                <Row className="mb-3">
+                  <Col md={4}>
+                    <p className="mb-1 text-muted">Tercero</p>
+                    <p className="fw-bold mb-0">{selectedFactura.tercero_nombre}</p>
+                  </Col>
+                  <Col md={4}>
+                    <p className="mb-1 text-muted">Fecha</p>
+                    <p className="fw-bold mb-0">{selectedFactura.fecha}</p>
+                  </Col>
+                  <Col md={4}>
+                    <p className="mb-1 text-muted">Valor Total</p>
+                    <p className="fw-bold mb-0 text-success">{formatCurrency(selectedFactura.valor_total)}</p>
+                  </Col>
+                </Row>
+                <div className="d-flex justify-content-end">
+                  <Button variant="outline-danger" size="sm" onClick={() => {
+                    setSelectedFactura(null);
+                    setSelectedItems([]);
+                    setItemAmounts({});
+                  }}>
+                    <FontAwesomeIcon icon={faTimesCircle} className="me-1" /> Cambiar Factura
+                  </Button>
+                </div>
               </Card.Body>
             </Card>
           )}
 
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <strong>Total Nota:</strong> {formatCurrency(totalNota)}
-            </div>
-            <Button variant="success" onClick={handleCrearNota} disabled={loading}>
-              {loading ? 'Creando...' : 'Crear Nota'}
-            </Button>
-          </div>
-        </Card.Body>
-      </Card>
+          {selectedFactura && selectedFactura.items && selectedFactura.items.length > 0 && (
+            <Card className="mb-4 shadow-sm">
+              <Card.Header className="bg-secondary text-white d-flex justify-content-between align-items-center">
+                <h5 className="mb-0"><FontAwesomeIcon icon={faList} className="me-2" />Detalle de Items</h5>
+                <Badge bg="light" text="dark">
+                  Seleccionados: {selectedItems.length} de {selectedFactura.items.length}
+                </Badge>
+              </Card.Header>
+              <Card.Body className="p-0">
+                <div className="table-responsive">
+                  <Table striped hover size="sm" className="mb-0 align-middle">
+                    <thead className="table-light">
+                      <tr>
+                        <th className="text-center" style={{ width: '50px' }}>
+                          {alcance === 'PARCIAL' ? 'Sel' : ''}
+                        </th>
+                        <th>Descripción</th>
+                        <th className="text-center" style={{ width: '80px' }}>Cant.</th>
+                        <th className="text-end" style={{ width: '120px' }}>V. Unitario</th>
+                        <th className="text-end" style={{ width: '150px' }}>V. Nota</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedFactura.items.map((item) => {
+                        const itemId = item.item_id || item.id;
+                        const descripcion = item.orden_servicio_item?.nombre_servicio || item.descripcion || 'Item';
+                        const cantidad = item.orden_servicio_item?.cantidad || item.cantidad || 1;
+                        const valorUnitario = item.orden_servicio_item?.precio_unitario || item.valor_unitario || 0;
+                        
+                        return (
+                          <tr key={itemId}>
+                            <td className="text-center">
+                              {alcance === 'PARCIAL' && (
+                                <Form.Check
+                                  type="checkbox"
+                                  checked={selectedItems.includes(itemId)}
+                                  onChange={() => handleSelectItem(itemId)}
+                                />
+                              )}
+                              {alcance === 'TOTAL' && (
+                                <FontAwesomeIcon icon={faCheckCircle} className="text-success" />
+                              )}
+                            </td>
+                            <td>{descripcion}</td>
+                            <td className="text-center">{parseFloat(cantidad).toString()}</td>
+                            <td className="text-end">{formatCurrency(valorUnitario)}</td>
+                            <td>
+                              <InputGroup size="sm">
+                                <InputGroup.Text>$</InputGroup.Text>
+                                <Form.Control
+                                  type="number"
+                                  className="text-end"
+                                  value={itemAmounts[itemId] || 0}
+                                  onChange={(e) => handleChangeItemAmount(itemId, e.target.value)}
+                                  readOnly={alcance === 'TOTAL' || !selectedItems.includes(itemId)}
+                                />
+                              </InputGroup>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </div>
+              </Card.Body>
+            </Card>
+          )}
+        </Col>
+
+        <Col lg={4}>
+          <Card className="shadow-sm sticky-top" style={{ top: '20px' }}>
+            <Card.Header className="bg-dark text-white">
+              <h5 className="mb-0"><FontAwesomeIcon icon={faMoneyBillWave} className="me-2" />Resumen</h5>
+            </Card.Header>
+            <Card.Body>
+              <div className="d-flex justify-content-between mb-2">
+                <span className="text-muted">Tipo de Nota:</span>
+                <Badge bg={tipoNota === 'CREDITO' ? 'success' : 'danger'} className="fs-6">
+                  {tipoNota}
+                </Badge>
+              </div>
+              <div className="d-flex justify-content-between mb-2">
+                <span className="text-muted">Alcance:</span>
+                <span className="fw-bold">{alcance}</span>
+              </div>
+              <div className="d-flex justify-content-between mb-3">
+                <span className="text-muted">Items Seleccionados:</span>
+                <span className="fw-bold">{selectedItems.length}</span>
+              </div>
+
+              <hr />
+
+              <div className="text-center mb-4">
+                <h6 className="text-muted mb-1">Valor Total de Nota</h6>
+                <h3 className="text-primary mb-0">
+                  {formatCurrency(totalNota)}
+                </h3>
+              </div>
+
+              <Button
+                variant="primary"
+                size="lg"
+                className="w-100 fw-bold"
+                onClick={handleCrearNota}
+                disabled={!selectedFactura || selectedItems.length === 0 || loading}
+              >
+                {loading ? (
+                  <><FontAwesomeIcon icon={faSpinner} spin className="me-2" /> Procesando...</>
+                ) : (
+                  <><FontAwesomeIcon icon={faCheckCircle} className="me-2" /> Crear Nota</>
+                )}
+              </Button>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

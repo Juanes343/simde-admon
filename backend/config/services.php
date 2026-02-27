@@ -55,6 +55,10 @@ return [
         // Número de resolución para PRUEBAS (comentado, solo para referencia)
         'resolucion_pruebas' => env('DATAICO_RESOLUCION_PRUEBAS', '18760000000001'),
         
+        // Prefijos para pruebas
+        'prefijo_pruebas_nc' => env('DATAICO_PREFIJO_PRUEBAS_NC', 'NCSET'),
+        'prefijo_pruebas_nd' => env('DATAICO_PREFIJO_PRUEBAS_ND', 'NDSETT'),
+        
         // Habilitar el envío directo a la DIAN
         'Envio_Dian' => env('DATAICO_ENVIO_DIAN', true),
         

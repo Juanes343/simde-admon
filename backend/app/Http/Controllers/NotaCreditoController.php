@@ -8,6 +8,7 @@ use App\Services\NotaCreditoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class NotaCreditoController extends Controller
 {
@@ -68,9 +69,14 @@ class NotaCreditoController extends Controller
                 'prefijo' => 'required|string|max:10',
                 'prefijo_factura' => 'required|string|max:10',
                 'factura_fiscal' => 'required|integer',
-                'concepto_id' => 'required|integer|exists:notas_credito_conceptos,id',
+                'concepto_id' => 'nullable|integer',
                 'valor_nota' => 'required|numeric|min:0.01',
                 'observacion' => 'nullable|string|max:500',
+                'tipo_nota' => 'required|string|in:CREDITO,DEBITO',
+                'alcance' => 'required|string|in:TOTAL,PARCIAL',
+                'items' => 'required|array|min:1',
+                'items.*.item_id' => 'required|integer',
+                'items.*.valor' => 'required|numeric|min:0',
             ]);
 
             if ($validator->fails()) {
@@ -148,6 +154,62 @@ class NotaCreditoController extends Controller
     }
 
     /**
+     * GET /api/notas-credito/{id}/descargar-zip
+     * Descargar ZIP con PDF y XML de la nota crédito
+     */
+    public function descargarZip(int $id)
+    {
+        try {
+            $notaCredito = NotaCredito::findOrFail($id);
+
+            if (!$notaCredito->respuesta_dataico || !isset($notaCredito->respuesta_dataico['pdf']) || !isset($notaCredito->respuesta_dataico['xml'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No hay archivos disponibles para descargar',
+                ], 404);
+            }
+
+            $pdfUrl = $notaCredito->respuesta_dataico['pdf'];
+            $xmlUrl = $notaCredito->respuesta_dataico['xml'];
+
+            $zip = new \ZipArchive();
+            $zipFileName = "Nota_{$notaCredito->prefijo}_{$notaCredito->nota_credito_id}.zip";
+            $zipPath = storage_path("app/public/{$zipFileName}");
+
+            if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                // Descargar y agregar PDF
+                $pdfContent = file_get_contents($pdfUrl);
+                if ($pdfContent !== false) {
+                    $zip->addFromString("{$notaCredito->prefijo}_{$notaCredito->nota_credito_id}.pdf", $pdfContent);
+                }
+
+                // Descargar y agregar XML
+                $xmlContent = file_get_contents($xmlUrl);
+                if ($xmlContent !== false) {
+                    $zip->addFromString("{$notaCredito->prefijo}_{$notaCredito->nota_credito_id}.xml", $xmlContent);
+                }
+
+                $zip->close();
+
+                return response()->download($zipPath)->deleteFileAfterSend(true);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'No se pudo crear el archivo ZIP',
+            ], 500);
+
+        } catch (\Exception $e) {
+            Log::error('Error descargando ZIP de nota crédito: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al descargar archivos',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * DELETE /api/notas-credito/{id}
      * Eliminar nota crédito (solo si está PENDIENTE)
      */
@@ -195,9 +257,9 @@ class NotaCreditoController extends Controller
                 $query->where('empresa_id', $empresaId);
             }
 
-            // Solo mostrar conceptos de crédito (sw_naturaleza = 'C')
-            $conceptos = $query->creditos()
-                               ->activos()
+            // Solo mostrar conceptos de crédito (sw_naturaleza = 'C') y activos (sw_activo = 1)
+            $conceptos = $query->where('sw_naturaleza', 'C')
+                               ->where('sw_activo', 1)
                                ->orderBy('descripcion')
                                ->get();
 
@@ -250,6 +312,40 @@ class NotaCreditoController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Error al obtener estadísticas',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/notas-credito/prefijos
+     * Obtener prefijos disponibles para notas crédito/débito
+     */
+    public function prefijos(Request $request)
+    {
+        try {
+            $empresaId = $request->query('empresa_id');
+            $tipo = $request->query('tipo', 'C'); // 'C' para crédito, 'D' para débito
+
+            // En la tabla documentos, el tipo_doc_general_id es el que indica si es NC o ND
+            $tipoDoc = $tipo === 'D' ? 'ND01' : 'NC01'; 
+            
+            $prefijos = DB::table('documentos')
+                ->where('empresa_id', '01') // Forzamos '01' porque en la BD el registro tiene empresa_id = '01'
+                ->where('tipo_doc_general_id', $tipoDoc)
+                ->select('documento_id', 'prefijo', 'descripcion')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $prefijos,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error obteniendo prefijos: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener prefijos',
                 'error' => $e->getMessage(),
             ], 500);
         }

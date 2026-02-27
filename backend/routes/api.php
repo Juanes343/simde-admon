@@ -29,8 +29,9 @@ Route::get('/ping', function () {
 // Facturación Electrónica (DataIco)
 Route::post('/electronic-invoicing/send', [ElectronicInvoicingController::class, 'sendInvoice']);
 
-// Notas Crédito
+// Notas Crédito (Catálogos públicos)
 Route::get('/notas-credito-conceptos', [NotaCreditoController::class, 'conceptos']);
+Route::get('/notas-credito/prefijos', [NotaCreditoController::class, 'prefijos']);
 
 // Facturación
 Route::get('/facturacion/prefijos', [FacturacionController::class, 'getPrefijos']);
@@ -97,14 +98,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
     
-    // Cambiar estado de items de orden de servicio
-    Route::post('/orden-servicio-items/{item_id}/cambiar-estado', [OrdenServicioController::class, 'cambiarEstadoItem']);
-
     // Notas Crédito
     Route::get('/notas-credito', [NotaCreditoController::class, 'index']);
     Route::post('/notas-credito', [NotaCreditoController::class, 'store']);
+    Route::get('/notas-credito/estadisticas', [NotaCreditoController::class, 'estadisticas']);
+    Route::get('/notas-credito/{id}/descargar-zip', [NotaCreditoController::class, 'descargarZip']);
+    Route::get('/notas-credito/{id}/descargar-pdf', [NotaCreditoController::class, 'descargarPdf']);
+    Route::get('/notas-credito/{id}/descargar-xml', [NotaCreditoController::class, 'descargarXml']);
     Route::get('/notas-credito/{id}', [NotaCreditoController::class, 'show']);
     Route::post('/notas-credito/{id}/enviar', [NotaCreditoController::class, 'enviar']);
     Route::delete('/notas-credito/{id}', [NotaCreditoController::class, 'destroy']);
-    Route::get('/notas-credito/estadisticas', [NotaCreditoController::class, 'estadisticas']);
+    
+    // Cambiar estado de items de orden de servicio
 });
