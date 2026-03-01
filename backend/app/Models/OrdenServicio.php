@@ -3,9 +3,46 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class OrdenServicio extends Model
 {
+    /**
+     * Generar un token único para la firma del cliente
+     */
+    public function generarTokenFirma()
+    {
+        $this->signature_token = Str::random(60);
+        $this->signature_token_expires_at = now()->addHours(24);
+        $this->save();
+        
+        return $this->signature_token;
+    }
+
+    /**
+     * Verificar si el token es válido
+     */
+    public function esTokenValido($token)
+    {
+        return $this->signature_token === $token && 
+               ($this->signature_token_expires_at === null || $this->signature_token_expires_at > now()) &&
+               $this->fecha_firma === null;
+    }
+
+    /**
+     * Invalidar token al firmar
+     */
+    public function firmar($base64Image)
+    {
+        $this->firma_tercero = $base64Image;
+        $this->fecha_firma = now();
+        $this->signature_token = null; // Invalidate token
+        $this->signature_token_expires_at = null;
+        $this->save();
+    }
+
+    use \Illuminate\Database\Eloquent\Concerns\HasUlids; // If using ULIDs, otherwise leave out. Assuming standard integer ID for now based on earlier file reads.
+
     protected $table = 'ordenes_servicio';
     protected $primaryKey = 'orden_servicio_id';
 
@@ -22,6 +59,10 @@ class OrdenServicio extends Model
         'sw_estado',
         'observaciones',
         'usuario_id',
+        'signature_token',
+        'signature_token_expires_at',
+        'firma_tercero',
+        'fecha_firma',
     ];
 
     protected $casts = [
@@ -29,6 +70,8 @@ class OrdenServicio extends Model
         'fecha_fin' => 'date',
         'porcentaje_soltec' => 'decimal:2',
         'porcentaje_ret_fuente' => 'decimal:2',
+        'signature_token_expires_at' => 'datetime',
+        'fecha_firma' => 'datetime',
     ];
 
     protected $appends = ['tercero'];

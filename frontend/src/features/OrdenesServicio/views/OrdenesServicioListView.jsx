@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Table, Badge, Button, Spinner } from 'react-bootstrap';
 import { format } from 'date-fns';
 
-const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView }) => {
+const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, onRequestSignature }) => {
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -119,6 +119,16 @@ const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView })
                   title="Ver detalles"
                 >
                   <i className="fas fa-eye"></i>
+                </Button>
+                <Button
+                  variant="outline-dark"
+                  size="sm"
+                  className="me-1"
+                  onClick={() => onRequestSignature && onRequestSignature(orden)}
+                  title={orden.fecha_firma ? 'Firmado' : 'Solicitar Firma'}
+                  disabled={!orden.sw_estado || orden.sw_estado === '0'}
+                >
+                  <i className={`fas ${orden.fecha_firma ? 'fa-check-circle text-success' : 'fa-file-signature'}`}></i>
                 </Button>
                 <Button
                   variant="outline-primary"

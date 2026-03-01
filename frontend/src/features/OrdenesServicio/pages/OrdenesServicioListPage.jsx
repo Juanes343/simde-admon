@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Container, Row, Col, Card, Button, Form, InputGroup } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Form, InputGroup, Modal } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import useOrdenesServicio from '../hooks/useOrdenesServicio';
 import OrdenesServicioListView from '../views/OrdenesServicioListView';
@@ -18,6 +18,12 @@ const OrdenesServicioListPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
   const [terceroFilter, setTerceroFilter] = useState('');
+  
+  // Estado para modal de firma
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [ordenForSignature, setOrdenForSignature] = useState(null);
+  const [signatureLoading, setSignatureLoading] = useState(false);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [ordenToToggle, setOrdenToToggle] = useState(null);
 
@@ -88,6 +94,47 @@ const OrdenesServicioListPage = () => {
 
   const handleView = (orden) => {
     navigate(`/ordenes-servicio/${orden.orden_servicio_id}`);
+  };
+
+  const handleRequestSignature = (orden) => {
+    if (orden.sw_estado !== '1') {
+      toast.warning('Solo se puede solicitar firma a órdenes activas.');
+      return;
+    }
+
+    if (orden.fecha_firma) {
+      toast.info('Esta orden ya está firmada.');
+      return;
+    }
+
+    setOrdenForSignature(orden);
+    setShowSignatureModal(true);
+  };
+
+  const confirmSignatureRequest = async () => {
+    if (!ordenForSignature) return;
+
+    setSignatureLoading(true);
+    try {
+      const response = await ordenServicioService.solicitarFirma(ordenForSignature.orden_servicio_id);
+      
+      // Si estamos en desarrollo, mostrar el link para probar
+      if (response.link_debug) {
+        console.log('LINK DE FIRMA (DEBUG):', response.link_debug);
+        toast.info('Link generado (ver consola)');
+        // Opción: abrir en nueva pestaña para probar
+        // window.open(response.link_debug, '_blank');
+      }
+      
+      toast.success(response.message || 'Solicitud enviada exitosamente');
+      setShowSignatureModal(false);
+      setOrdenForSignature(null);
+    } catch (error) {
+      console.error('Error al solicitar firma:', error);
+      toast.error('Error al enviar la solicitud de firma.');
+    } finally {
+      setSignatureLoading(false);
+    }
   };
 
   return (
@@ -161,6 +208,7 @@ const OrdenesServicioListPage = () => {
             onEdit={handleEdit}
             onDelete={handleDeleteClick}
             onView={handleView}
+            onRequestSignature={handleRequestSignature}
           />
         </Card.Body>
       </Card>
@@ -190,6 +238,25 @@ const OrdenesServicioListPage = () => {
           </Button>
         </div>
       )}
+
+      {/* Modal de confirmación para Firma */}
+      <Modal show={showSignatureModal} onHide={() => !signatureLoading && setShowSignatureModal(false)}>
+        <Modal.Header closeButton={!signatureLoading}>
+          <Modal.Title>Solicitar Firma de Cliente</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>¿Enviar solicitud de firma al correo <strong>{ordenForSignature?.email_tercero || ordenForSignature?.tercero?.email || 'No disponible'}</strong> del tercero para la orden <strong>{ordenForSignature?.numero_orden}</strong>?</p>
+          <p className="text-muted small">Asegúrese de que el correo es correcto antes de enviar.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowSignatureModal(false)} disabled={signatureLoading}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={confirmSignatureRequest} disabled={signatureLoading}>
+            {signatureLoading ? 'Enviando...' : 'Enviar Solicitud'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal de confirmación */}
       <ConfirmModal

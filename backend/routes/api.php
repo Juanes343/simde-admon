@@ -15,6 +15,7 @@ use App\Http\Controllers\FacturacionController;
 use App\Http\Controllers\ElectronicInvoicingController;
 use App\Http\Controllers\ElectronicInvoiceDownloadController;
 use App\Http\Controllers\NotaCreditoController;
+use App\Http\Controllers\FirmaDigitalController;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,6 +26,10 @@ use App\Http\Controllers\NotaCreditoController;
 Route::get('/ping', function () {
     return response()->json(['status' => 'ok', 'message' => 'API is running']);
 });
+
+// Rutas Públicas de Firma Digital
+Route::get('/public/ordenes-servicio/{id}/firmar/{token}', [FirmaDigitalController::class, 'verificarToken']);
+Route::post('/public/ordenes-servicio/firmar', [FirmaDigitalController::class, 'firmar']);
 
 // Facturación Electrónica (DataIco)
 Route::post('/electronic-invoicing/send', [ElectronicInvoicingController::class, 'sendInvoice']);
@@ -53,6 +58,9 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Órdenes de Servicio - Firma Digital (Admin)
+    Route::post('/ordenes-servicio/{id}/solicitar-firma', [FirmaDigitalController::class, 'solicitarFirma']);
 
     // Facturación Electrónica - Auditoría y Descargas
     Route::get('/electronic-invoicing/audit/{cufe}', [ElectronicInvoiceDownloadController::class, 'getAuditByCufe']);

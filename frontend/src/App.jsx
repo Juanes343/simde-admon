@@ -26,6 +26,7 @@ import ServicioFormPage from './features/Servicios/pages/ServicioFormPage';
 import OrdenesServicioListPage from './features/OrdenesServicio/pages/OrdenesServicioListPage';
 import OrdenServicioFormPage from './features/OrdenesServicio/pages/OrdenServicioFormPage';
 import OrdenServicioDetailPage from './features/OrdenesServicio/pages/OrdenServicioDetailPage';
+import OrdenServicioSignaturePage from './features/OrdenesServicio/pages/OrdenServicioSignaturePage';
 
 // Facturacion
 import FacturacionView from './features/Facturacion/views/FacturacionView';
@@ -58,6 +59,7 @@ function App() {
           {/* Rutas públicas */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/firmar-orden/:id/:token" element={<OrdenServicioSignaturePage />} />
           
           {/* Rutas protegidas */}
           <Route
