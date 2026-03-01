@@ -10,8 +10,14 @@ class NotaCreditoItem extends Model
 
     protected $fillable = [
         'nota_credito_id',
-        'item_id',
-        'valor',
+        'codigo_item',
+        'descripcion',
+        'cantidad',
+        'precio_unitario',
+        'subtotal',
+        'porcentaje_impuesto',
+        'valor_impuesto',
+        'total',
     ];
 
     public function notaCredito()

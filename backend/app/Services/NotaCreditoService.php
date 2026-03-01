@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\NotaCredito;
 use App\Models\NotaCreditoConcepto;
+use App\Models\NotaCreditoItem;
+use App\Models\OrdenServicioItem;
 use App\Models\FacFactura;
 use App\Models\AuditoriaDataIco;
 use App\Models\AuditoriaNotaCredito;
@@ -62,10 +64,41 @@ class NotaCreditoService
             // 4. Guardar items de la nota crédito si existen
             if (isset($data['items']) && is_array($data['items'])) {
                 foreach ($data['items'] as $item) {
-                    // Aquí deberías guardar los items en la tabla correspondiente
-                    // Ejemplo: NotaCreditoDetalle::create([...])
-                    // Por ahora solo lo registramos en el log
-                    Log::info("Item de nota crédito: ", $item);
+                    $osItem = null;
+                    $cantidad = 1;
+                    $precio = $item['valor'];
+                    $descripcion = 'Item Nota Crédito';
+                    $sku = 'ITEM-NC';
+
+                    if (isset($item['item_id'])) {
+                        // Buscar item original para traer datos
+                        $osItem = OrdenServicioItem::find($item['item_id']);
+                        if ($osItem) {
+                            $descripcion = $osItem->nombre_servicio ?? $osItem->descripcion;
+                            $sku = $osItem->servicio_id;
+                            
+                            // Verificar si es devolución total del ítem para conservar cantidad original
+                            $totalOriginal = (float)($osItem->cantidad ?? 1) * (float)($osItem->precio_unitario ?? 0);
+                            
+                            // Si la diferencia es mínima, asumimos que es nota total por ese ítem
+                            if (abs($totalOriginal - (float)$item['valor']) < 1.0) {
+                                $cantidad = (float)($osItem->cantidad ?? 1);
+                                $precio = (float)($osItem->precio_unitario ?? $item['valor']);
+                            }
+                        }
+                    }
+
+                    NotaCreditoItem::create([
+                        'nota_credito_id' => $notaCredito->id,
+                        'codigo_item' => $sku,
+                        'descripcion' => $descripcion,
+                        'cantidad' => $cantidad,
+                        'precio_unitario' => $precio,
+                        'subtotal' => $item['valor'], // El subtotal de la línea siempre debe sumar lo que se pidió
+                        'porcentaje_impuesto' => 0,
+                        'valor_impuesto' => 0,
+                        'total' => $item['valor'],
+                    ]);
                 }
             }
 
@@ -311,39 +344,56 @@ class NotaCreditoService
     protected function buildNotaCreditoItems(NotaCredito $notaCredito, FacFactura $factura)
     {
         $items = [];
-        
-        // Si la nota es TOTAL, traemos los items de la factura original
-        if ($notaCredito->alcance === 'TOTAL') {
-            // Cargar los items de la factura con sus detalles
-            $factura->load('items.ordenServicioItem');
-            
-            if ($factura->items && $factura->items->count() > 0) {
-                foreach ($factura->items as $facItem) {
-                    $osItem = $facItem->ordenServicioItem;
-                    if ($osItem) {
-                        $items[] = [
-                            'sku' => $osItem->cargo ?? 'ITEM',
-                            'description' => $osItem->descripcion ?? 'Item de factura',
-                            'quantity' => (float) ($osItem->cantidad ?? 1),
-                            'price' => (float) ($osItem->valor ?? 0),
-                            'original_price' => (float) ($osItem->valor ?? 0),
-                        ];
-                    }
-                }
+
+        // Cargar los items de la nota crédito (ya deben existir en la tabla notas_credito_items)
+        $notaCredito->load('items');
+
+        if ($notaCredito->items && $notaCredito->items->count() > 0) {
+            foreach ($notaCredito->items as $ncItem) {
+                // $ncItem ya tiene la info básica guardada (descripcion, precio, etc.)
+                $items[] = [
+                    'sku' => $ncItem->codigo_item ?? 'ITEM-NC-' . $ncItem->id,
+                    'description' => $ncItem->descripcion ?? 'Item Nota Crédito',
+                    'quantity' => (float) $ncItem->cantidad,
+                    'price' => (float) $ncItem->precio_unitario,
+                    'original_price' => (float) $ncItem->precio_unitario,
+                ];
             }
         }
         
-        // Si no se encontraron items (o es PARCIAL y no se ha implementado la lógica de items parciales),
-        // enviamos un item genérico por el valor total de la nota
+        // Si no hay items guardados (ej. notas antiguas), fallback a lógica anterior
         if (empty($items)) {
-            $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
-            $items[] = [
-                'sku' => $notaCredito->prefijo . $notaCredito->nota_credito_id,
-                'description' => $notaCredito->concepto->descripcion ?? $descripcion,
-                'quantity' => 1,
-                'price' => (float) $notaCredito->valor_nota,
-                'original_price' => (float) $notaCredito->valor_nota,
-            ];
+            // Si la nota es TOTAL, traemos los items de la factura original
+            if ($notaCredito->alcance === 'TOTAL') {
+                // Cargar los items de la factura con sus detalles
+                $factura->load('items.ordenServicioItem');
+                
+                if ($factura->items && $factura->items->count() > 0) {
+                    foreach ($factura->items as $facItem) {
+                        $osItem = $facItem->ordenServicioItem;
+                        if ($osItem) {
+                            $items[] = [
+                                'sku' => $osItem->servicio_id ?? 'ITEM',
+                                'description' => $osItem->nombre_servicio ?? $osItem->descripcion ?? 'Item de factura',
+                                'quantity' => (float) ($osItem->cantidad ?? 1),
+                                'price' => (float) ($osItem->precio_unitario ?? 0),
+                                'original_price' => (float) ($osItem->precio_unitario ?? 0),
+                            ];
+                        }
+                    }
+                }
+            }
+            // Fallback final
+            if (empty($items)) {
+                $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
+                $items[] = [
+                    'sku' => $notaCredito->prefijo . $notaCredito->nota_credito_id,
+                    'description' => $notaCredito->concepto->descripcion ?? $descripcion,
+                    'quantity' => 1,
+                    'price' => (float) $notaCredito->valor_nota,
+                    'original_price' => (float) $notaCredito->valor_nota,
+                ];
+            }
         }
         
         return $items;

@@ -80,7 +80,12 @@ const NotasCreditoView = () => {
       const amounts = {};
       items.forEach((item) => {
         const itemId = item.item_id || item.id;
-        const subtotal = item.orden_servicio_item?.subtotal || item.subtotal || (item.valor_unitario * item.cantidad);
+        const subtotal = item.orden_servicio_item?.subtotal 
+                         || item.subtotal 
+                         || (item.valor_unitario * item.cantidad)
+                         || (item.precio_unitario * item.cantidad)
+                         || item.total
+                         || 0;
         amounts[itemId] = parseFloat(subtotal) || 0;
       });
       setItemAmounts(amounts);
@@ -553,9 +558,13 @@ const NotasCreditoView = () => {
                     <tbody>
                       {selectedFactura.items.map((item) => {
                         const itemId = item.item_id || item.id;
-                        const descripcion = item.orden_servicio_item?.nombre_servicio || item.descripcion || 'Item';
+                        const descripcion = item.orden_servicio_item?.nombre_servicio 
+                                            || item.orden_servicio_item?.descripcion
+                                            || item.nombre_servicio
+                                            || item.descripcion 
+                                            || 'Item';
                         const cantidad = item.orden_servicio_item?.cantidad || item.cantidad || 1;
-                        const valorUnitario = item.orden_servicio_item?.precio_unitario || item.valor_unitario || 0;
+                        const valorUnitario = item.orden_servicio_item?.precio_unitario || item.valor_unitario || item.precio_unitario || 0;
                         
                         return (
                           <tr key={itemId}>

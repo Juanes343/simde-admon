@@ -47,6 +47,14 @@ class NotaCredito extends Model
     }
 
     /**
+     * Relación: Tiene muchos items
+     */
+    public function items()
+    {
+        return $this->hasMany(NotaCreditoItem::class, 'nota_credito_id', 'id');
+    }
+
+    /**
      * Relación: Pertenece a una factura electrónica (auditoría)
      */
     public function auditoria()
