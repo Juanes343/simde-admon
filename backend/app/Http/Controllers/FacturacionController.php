@@ -39,20 +39,20 @@ class FacturacionController extends Controller
         $lapsoFin = $request->query('lapso_fin');
         $tercero = $request->query('tercero');
 
-        $query = OrdenServicio::with(['items' => function ($q) {
-            // Solo traer items que NO estén en fac_facturas_items
-            $q->whereNotExists(function ($sub) {
-                $sub->select(DB::raw(1))
-                    ->from('fac_facturas_items')
-                    ->whereColumn('fac_facturas_items.item_id', 'orden_servicio_items.item_id');
-            });
-        }]);
+        // Iniciar query con órdenes activas
+        $query = OrdenServicio::where('sw_estado', '1');
 
-        if ($lapsoInicio) {
-            $query->where('fecha_inicio', '>=', $lapsoInicio);
-        }
-        if ($lapsoFin) {
-            $query->where('fecha_inicio', '<=', $lapsoFin);
+        if ($lapsoInicio && $lapsoFin) {
+            // La orden debe estar vigente (cruzarse) con el lapso seleccionado
+            $query->where(function($q) use ($lapsoInicio, $lapsoFin) {
+                $q->where('fecha_inicio', '<=', $lapsoFin)
+                  ->where('fecha_fin', '>=', $lapsoInicio);
+            });
+        } else {
+             // Si no hay filtro, por defecto mostrar vigentes a la fecha actual
+             $now = date('Y-m-d');
+             $query->where('fecha_inicio', '<=', $now)
+                   ->where('fecha_fin', '>=', $now);
         }
         
         if ($tercero) {
@@ -68,14 +68,31 @@ class FacturacionController extends Controller
             });
         }
 
-        // Solo ordenes que tengan al menos un item pendiente
-        $ordenes = $query->whereHas('items', function ($q) {
-            $q->whereNotExists(function ($sub) {
+        // Definir el rango de chequeo para verificar duplicados.
+        // Si el usuario no filtra, asumimos que intenta facturar el mes actual.
+        $checkInicio = $lapsoInicio ?? Carbon::now()->startOfMonth()->format('Y-m-d');
+        $checkFin = $lapsoFin ?? Carbon::now()->endOfMonth()->format('Y-m-d');
+
+        // Callback para determinar qué Items mostrar (Excluir los que ya estan facturados en ese periodo)
+        $itemFilter = function ($q) use ($checkInicio, $checkFin) {
+            $q->whereNotExists(function ($sub) use ($checkInicio, $checkFin) {
                 $sub->select(DB::raw(1))
                     ->from('fac_facturas_items')
-                    ->whereColumn('fac_facturas_items.item_id', 'orden_servicio_items.item_id');
+                    ->join('fac_facturas', 'fac_facturas.factura_fiscal_id', '=', 'fac_facturas_items.factura_fiscal_id')
+                    ->whereColumn('fac_facturas_items.item_id', 'orden_servicio_items.item_id')
+                    ->where('fac_facturas.estado', '!=', '0') // No contar anuladas
+                    ->where(function ($dateQ) use ($checkInicio, $checkFin) {
+                        // Verificar si el periodo de la factura se cruza con el rango chequeado
+                        $dateQ->whereDate('fac_facturas.fecha_periodo_inicio', '<=', $checkFin)
+                              ->whereDate('fac_facturas.fecha_periodo_fin', '>=', $checkInicio);
+                    });
             });
-        })->get();
+        };
+
+        // Cargar items filtrados y filtrar la orden principal
+        $ordenes = $query->with(['items' => $itemFilter])
+                         ->whereHas('items', $itemFilter)
+                         ->get();
 
         return response()->json($ordenes);
     }
