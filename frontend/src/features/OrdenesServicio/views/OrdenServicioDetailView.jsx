@@ -15,7 +15,10 @@ const OrdenServicioDetailView = ({ orden }) => {
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';
-    return format(new Date(dateString), 'dd/MM/yyyy');
+    // Ajustar zona horaria para mostrar la fecha tal cual viene del servidor
+    const dt = new Date(dateString);
+    const dtUser = new Date(dt.valueOf() + dt.getTimezoneOffset() * 60000);
+    return format(dtUser, 'dd/MM/yyyy');
   };
 
   // Calcular total desde items si no viene del backend

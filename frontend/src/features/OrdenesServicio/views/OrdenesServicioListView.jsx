@@ -32,7 +32,10 @@ const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, o
 
   const formatDate = (date) => {
     if (!date) return '-';
-    return format(new Date(date), 'dd/MM/yyyy');
+    // Ajustar zona horaria para mostrar la fecha tal cual viene del servidor
+    const dt = new Date(date);
+    const dtUser = new Date(dt.valueOf() + dt.getTimezoneOffset() * 60000);
+    return format(dtUser, 'dd/MM/yyyy');
   };
 
   return (

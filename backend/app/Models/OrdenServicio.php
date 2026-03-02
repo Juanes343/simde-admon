@@ -41,7 +41,7 @@ class OrdenServicio extends Model
         $this->save();
     }
 
-    use \Illuminate\Database\Eloquent\Concerns\HasUlids; // If using ULIDs, otherwise leave out. Assuming standard integer ID for now based on earlier file reads.
+    // use \Illuminate\Database\Eloquent\Concerns\HasUlids; // COMENTADO: La BD espera BIGINT, no ULID.
 
     protected $table = 'ordenes_servicio';
     protected $primaryKey = 'orden_servicio_id';

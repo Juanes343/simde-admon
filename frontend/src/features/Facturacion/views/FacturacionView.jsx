@@ -47,11 +47,14 @@ const FacturacionView = () => {
       const data = await facturacionService.getPendientes(filters.lapso_inicio, filters.lapso_fin, filters.tercero);
       setOrdenes(data);
       
-      // Pre-seleccionar todos los items
+      // Pre-seleccionar todos los items validos (saldo > 0)
       const todosLosItems = [];
       data.forEach(orden => {
         orden.items.forEach(item => {
-          todosLosItems.push(item.item_id);
+          // Solo preseleccionar si tiene valor monetario significativo
+          if (parseFloat(item.subtotal) > 0.01) {
+            todosLosItems.push(item.item_id);
+          }
         });
       });
       setSelectedItems(todosLosItems);
@@ -362,9 +365,16 @@ const FacturacionView = () => {
                               type="checkbox"
                               checked={selectedItems.includes(item.item_id)}
                               onChange={() => handleSelectItem(item.item_id)}
+                              // Deshabilitar selección si el item vale 0
+                              disabled={parseFloat(item.subtotal || 0) <= 0.01}
                             />
                           </td>
-                          <td>{item.nombre_servicio}</td>
+                          <td>
+                            {item.nombre_servicio}
+                            {parseFloat(item.subtotal || 0) <= 0.01 && (
+                              <Badge bg="secondary" className="ms-2">Sin costo</Badge>
+                            )}
+                          </td>
                           <td className="text-center">{item.cantidad}</td>
                           <td className="text-end text-success">{formatCurrency(item.precio_unitario)}</td>
                           <td className="text-end fw-bold">{formatCurrency(item.subtotal)}</td>
@@ -373,16 +383,30 @@ const FacturacionView = () => {
                     </tbody>
                   </Table>
                   <Card.Footer className="bg-light d-flex justify-content-end p-3">
-                    {orden.items.filter(i => selectedItems.includes(i.item_id)).length > 0 && (
-                      <Button
-                        variant="success"
-                        size="sm"
-                        onClick={() => handleFacturarOrden(orden)}
-                      >
-                        <i className="fas fa-file-invoice-dollar me-2"></i>
-                        GENERAR FACTURA ({orden.items.filter(i => selectedItems.includes(i.item_id)).length} ítems)
-                      </Button>
-                    )}
+                    {(() => {
+                      const itemsSeleccionados = orden.items.filter(i => selectedItems.includes(i.item_id));
+                      const totalSeleccionado = itemsSeleccionados.reduce((acc, item) => acc + (parseFloat(item.subtotal) || 0), 0);
+
+                      // Solo mostrar botón si hay items y el total es significativamente mayor a 0
+                      if (itemsSeleccionados.length > 0 && totalSeleccionado > 0.01) {
+                        return (
+                          <div className="d-flex align-items-center gap-3">
+                            <span className="fw-bold text-dark me-2">
+                              Total a facturar: {formatCurrency(totalSeleccionado)}
+                            </span>
+                            <Button
+                              variant="success"
+                              size="sm"
+                              onClick={() => handleFacturarOrden(orden)}
+                            >
+                              <i className="fas fa-file-invoice-dollar me-2"></i>
+                              GENERAR FACTURA ({itemsSeleccionados.length} ítems)
+                            </Button>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </Card.Footer>
                 </Card>
               ))}
