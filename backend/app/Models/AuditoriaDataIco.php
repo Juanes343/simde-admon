@@ -26,12 +26,14 @@ class AuditoriaDataIco extends Model
         'pdf_url',
         'qrcode',
         'json_respuesta',
+        'json_envio',
         'fecha_registro',
     ];
 
     protected $casts = [
         'fecha_registro' => 'datetime',
         'json_respuesta' => 'array',
+        'json_envio' => 'array',
     ];
 
     /**

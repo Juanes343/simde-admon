@@ -204,9 +204,10 @@ class ElectronicInvoicingService
                 "dataico_account_id" => config('services.dataico.dataico_account_id', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'),
                 "number" => (int) preg_replace('/[^0-9]/', '', $factura->factura_fiscal),
                 "issue_date" => Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
-                "payment_date" => $factura->fecha_vencimiento_factura 
-                    ? Carbon::parse($factura->fecha_vencimiento_factura)->format('d/m/Y') 
-                    : Carbon::parse($factura->fecha_registro)->format('d/m/Y'),
+                // Calculamos fecha vencimiento sumando los días de crédito del tercero a la fecha de registro
+                "payment_date" => Carbon::parse($factura->fecha_registro)
+                    ->addDays((int)($tercero->dias_credito ?? 0))
+                    ->format('d/m/Y'),
                 "order_reference" => "0",
                 "invoice_type_code" => $this->getInvoiceTypeCode($documentType),
                 "operation" => "ESTANDAR",
@@ -232,7 +233,8 @@ class ElectronicInvoicingService
                 "first_name" => (string) ($tercero->primer_nombre ?? 'x'),
                 "family_name" => (string) ($tercero->primer_apellido ?? 'x'),
                 "items" => $this->buildInvoiceItems($factura, $documentType),
-                "retentions" => $this->buildRetentions($factura)
+                "retentions" => $this->buildRetentions($factura),
+                "notes" => $this->buildNotes($factura)
             ];
 
             // NOTA: No enviamos "health" - DataIco lo requiere solo cuando está COMPLETAMENTE lleno
@@ -240,7 +242,7 @@ class ElectronicInvoicingService
 
             $payload = [
                 "actions" => [
-                    "send_dian" => config('services.dataico.Envio_Dian', true),
+                    "send_dian" => config('services.dataico.Envio_Dian', false),
                     "send_email" => true
                 ],
                 "invoice" => $invoiceData
@@ -276,7 +278,7 @@ class ElectronicInvoicingService
             $retentionAmount = ($baseAmount * $porcentajeRetFuente) / 100;
             
             $retentions[] = [
-                "tax_category" => "RET_IVA",
+                "tax_category" => "RET_FUENTE",
                 "tax_rate" => $porcentajeRetFuente,
                 "base_amount" => $baseAmount,
                 "amount" => round($retentionAmount, 2)
@@ -332,6 +334,64 @@ class ElectronicInvoicingService
         return $recaudos;
     }
 
+    /**
+     * Calcula el total a pagar incluyendo impuestos y restando retenciones.
+     */
+    protected function calculateTotalPayable(FacFactura $factura)
+    {
+        $baseTotal = (float) ($factura->total_factura ?? 0);
+        $totalImpuestos = 0;
+        $porcentajeRetFuente = 0;
+
+        if ($factura->items && $factura->items->count() > 0) {
+            // 1. IMPUESTOS
+            foreach ($factura->items as $item) {
+                // Recuperar OrdenServicioItem asociado
+                $osItem = $item->ordenServicioItem;
+                if (!$osItem && $item->item_id) {
+                    $osItem = \App\Models\OrdenServicioItem::with('ordenServicio')->find($item->item_id);
+                }
+
+                if ($osItem) {
+                    $price = (float) $osItem->precio_unitario;
+                    $quantity = (float) $osItem->cantidad;
+                    $subtotalItem = $price * $quantity;
+
+                    // Buscar Impuesto
+                    $porcentajeImpuesto = 0;
+                    $impuestoId = $osItem->impuesto_id;
+                    
+                    // Fallback a servicio si no está en el item
+                    if (!$impuestoId && $osItem->servicio_id) {
+                        $servicio = \App\Models\Servicio::find($osItem->servicio_id);
+                        if ($servicio) {
+                            $impuestoId = $servicio->impuesto_id;
+                        }
+                    }
+
+                    if ($impuestoId) {
+                        $impuesto = Impuesto::find($impuestoId);
+                        if ($impuesto) {
+                            $porcentajeImpuesto = (float) ($impuesto->porcentaje_impuesto ?? $impuesto->porcentaje ?? 0);
+                        }
+                    }
+
+                    $totalImpuestos += ($subtotalItem * $porcentajeImpuesto) / 100;
+
+                    // 2. RETENCION (Tomamos el porcentaje de la primera orden que encontremos)
+                    if ($porcentajeRetFuente == 0 && $osItem->ordenServicio) {
+                        $porcentajeRetFuente = (float) ($osItem->ordenServicio->porcentaje_ret_fuente ?? 0);
+                    }
+                }
+            }
+        }
+
+        $totalRetenciones = ($baseTotal * $porcentajeRetFuente) / 100;
+        $totalPagar = $baseTotal + $totalImpuestos - $totalRetenciones;
+        
+        return max(0, $totalPagar); // Evitar negativos
+    }
+
     protected function buildNotes(FacFactura $factura)
     {
         $notas = [];
@@ -340,13 +400,51 @@ class ElectronicInvoicingService
         $facturador = $factura->usuario ? $factura->usuario->nombre : 'SISTEMA MASTER';
         $notas[] = "FACTURADOR: {$facturador}";
         
-        // SON: Convertir monto a letras
-        $montoEnLetras = $this->amountToWords($factura->total_factura);
+        // SON: Convertir monto NETO a letras (Base + IVA - Retenciones)
+        $totalPagar = $this->calculateTotalPayable($factura);
+        $montoEnLetras = $this->amountToWords($totalPagar);
         $notas[] = "SON: {$montoEnLetras}";
         
-        // Agregar observaciones de la orden si existe
+        // 1. Observaciones directas de la factura
         if (!empty($factura->observacion)) {
             $notas[] = "OBSERVACIONES: {$factura->observacion}";
+        }
+
+        // 2. Observaciones de la Orden de Servicio
+        // Obtenemos las observaciones desde la tabla 'ordenes_servicios' vinculada a los items.
+        if ($factura->items && $factura->items->count() > 0) {
+            foreach ($factura->items as $item) {
+                $ordenServicio = null;
+
+                // Opción A: Vía relación cargada FacFacturaItem -> OrdenServicioItem -> OrdenServicio
+                if ($item->ordenServicioItem && $item->ordenServicioItem->ordenServicio) {
+                    $ordenServicio = $item->ordenServicioItem->ordenServicio;
+                } 
+                // Opción B: Si falla la relación, intentar buscar manualmente usando el ID
+                elseif ($item->item_id) {
+                     $osItem = \App\Models\OrdenServicioItem::with('ordenServicio')->find($item->item_id);
+                     if ($osItem) {
+                         $ordenServicio = $osItem->ordenServicio;
+                     }
+                }
+
+                // Si encontramos la orden y tiene observaciones, las agregamos
+                if ($ordenServicio && !empty($ordenServicio->observaciones)) {
+                    $obsOrden = trim($ordenServicio->observaciones);
+                    
+                    // Verificamos no repetir la misma observación si ya está en la factura o ya fue agregada
+                    $notaFormateada = "{$obsOrden}";
+                    $yaExiste = in_array($notaFormateada, $notas) || 
+                                ($obsOrden === trim($factura->observacion ?? ''));
+                    
+                    if (!$yaExiste) {
+                         $notas[] = $notaFormateada;
+                    }
+                    
+                    // Solo tomamos la observación de la primera orden encontrada para no saturar las notas
+                    break; 
+                }
+            }
         }
         
         return $notas;
@@ -440,7 +538,16 @@ class ElectronicInvoicingService
                     $quantity = (float) $osItem->cantidad;
                     $description = $osItem->nombre_servicio ?: $osItem->descripcion;
                     $price = (float) $osItem->precio_unitario;
+                    
+                    // Buscar impuesto: Primero en el item, si no, en el servicio asociado
                     $impuestoId = $osItem->impuesto_id;
+                    if (!$impuestoId && $osItem->servicio_id) {
+                         $servicio = \App\Models\Servicio::find($osItem->servicio_id);
+                         if ($servicio) {
+                             $impuestoId = $servicio->impuesto_id;
+                         }
+                    }
+
                     $observaciones = $osItem->observaciones ?? '';
                     
                     // Obtener información del impuesto si existe
@@ -564,14 +671,16 @@ class ElectronicInvoicingService
     protected function auditResult(FacFactura $factura, array $result, array $payload)
     {
         try {
+            // Buscar registro existente
+            $auditRecord = AuditoriaDataIco::where('factura_fiscal_id', $factura->factura_fiscal_id)->first();
+
             if (isset($result['success']) && $result['success']) {
                 // Extraer datos de la respuesta exitosa
                 $responseData = $result['data'] ?? [];
                 
-                // Crear registro de auditoría
-                $auditRecord = AuditoriaDataIco::create([
-                    'prefijo' => $factura->prefijo,
+                $auditData = [
                     'factura_fiscal_id' => $factura->factura_fiscal_id,
+                    'prefijo' => $factura->prefijo,
                     'numero' => $responseData['number'] ?? $factura->prefijo . $factura->numero_factura,
                     'dian_status' => $responseData['dian_status'] ?? 'DIAN_EN_PROCESO',
                     'customer_status' => $responseData['customer_status'] ?? null,
@@ -584,7 +693,14 @@ class ElectronicInvoicingService
                     'pdf_url' => $responseData['pdf_url'] ?? null,
                     'qrcode' => $responseData['qrcode'] ?? null,
                     'json_respuesta' => json_encode($responseData),
-                ]);
+                    'json_envio' => json_encode($payload),
+                ];
+
+                if ($auditRecord) {
+                    $auditRecord->update($auditData);
+                } else {
+                    $auditRecord = AuditoriaDataIco::create($auditData);
+                }
                 
                 // Determinar estado basado en dian_status
                 $estadoElectronico = match ($responseData['dian_status'] ?? 'DIAN_EN_PROCESO') {
@@ -603,19 +719,19 @@ class ElectronicInvoicingService
                     'fecha_respuesta_dataico' => now(),
                 ]);
                 
-                Log::info("Factura ID {$factura->factura_fiscal_id} auditada en DataIco", [
+                Log::info("Factura ID {$factura->factura_fiscal_id} auditada en DataIco (Update: " . ($auditRecord->wasChanged() ? 'Yes' : 'No') . ")", [
                     'cufe' => $responseData['cufe'] ?? 'N/A',
                     'dian_status' => $responseData['dian_status'] ?? 'N/A',
                     'auditoria_id' => $auditRecord->id_auditoria_dataico,
                 ]);
                 
             } else {
-                // Crear registro de auditoría para errores
+                // Crear o Actualizar registro de auditoría para errores
                 $errorData = $result['errors'] ?? [];
                 
-                $auditRecord = AuditoriaDataIco::create([
-                    'prefijo' => $factura->prefijo,
+                $auditData = [
                     'factura_fiscal_id' => $factura->factura_fiscal_id,
+                    'prefijo' => $factura->prefijo,
                     'numero' => $factura->prefijo . $factura->numero_factura,
                     'dian_status' => 'ERROR',
                     'customer_status' => null,
@@ -628,7 +744,14 @@ class ElectronicInvoicingService
                         'errors' => $errorData,
                         'sent_payload' => $payload,
                     ]),
-                ]);
+                    'json_envio' => json_encode($payload),
+                ];
+
+                if ($auditRecord) {
+                    $auditRecord->update($auditData);
+                } else {
+                    $auditRecord = AuditoriaDataIco::create($auditData);
+                }
                 
                 // Actualizar factura con error
                 $factura->update([
