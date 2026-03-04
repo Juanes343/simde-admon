@@ -51,7 +51,15 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      
+      // Corrección para manejar redirección en subcarpetas con HashRouter
+      if (window.location.hash) {
+        window.location.hash = '#/login';
+      } else {
+        // Si no usa HashRouter, intentamos recargar para que el Router maneje la redirección
+        // o ir a la raíz si es necesario.
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

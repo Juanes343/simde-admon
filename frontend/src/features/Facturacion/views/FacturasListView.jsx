@@ -354,8 +354,13 @@ const FacturasListView = () => {
                         {getDianStatusBadge(f)}
                       </td>
                       <td className="text-center">
-                        {/* Si NO tiene CUFE, mostrar botón para enviar */}
-                        {f.estado === '1' && !f.cufe && (
+                        {f.estado === '1' && (
+                          (!f.estado_electronico || 
+                           f.estado_electronico === 'NO_ENVIADO' || 
+                           f.estado_electronico === 'RECHAZADA' || 
+                           f.estado_electronico === 'ERROR' ||
+                           f.estado_electronico === 'ENVIADA')
+                        ) && (
                           <Button 
                             size="sm" 
                             variant="success" 
