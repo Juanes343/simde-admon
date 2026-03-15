@@ -12,6 +12,9 @@ const FacturacionView = () => {
   const [loading, setLoading] = useState(false);
   const [prefijoSelected, setPrefijoSelected] = useState('');
   const [selectedItems, setSelectedItems] = useState([]);
+  const [editedItems, setEditedItems] = useState({}); // { [item_id]: { cantidad, precio_unitario, observacion } }
+  const [expandedOrdenes, setExpandedOrdenes] = useState({}); // { [orden_servicio_id]: bool }
+  const [generando, setGenerando] = useState(false);
   const [filters, setFilters] = useState({
     lapso_inicio: '',
     lapso_fin: '',
@@ -31,6 +34,33 @@ const FacturacionView = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [filters]);
 
+  // --- Helpers para valores editados ---
+  const getItemCantidad = (item) => editedItems[item.item_id]?.cantidad ?? item.cantidad;
+  const getItemPrecio = (item) => editedItems[item.item_id]?.precio_unitario ?? item.precio_unitario;
+  const getItemSubtotal = (item) => {
+    const c = parseFloat(getItemCantidad(item)) || 0;
+    const p = parseFloat(getItemPrecio(item)) || 0;
+    return c * p;
+  };
+  const getItemObservacion = (item) => editedItems[item.item_id]?.observacion ?? (item.observaciones || '');
+  const getItemIvaPorcentaje = (item) => {
+    if (editedItems[item.item_id]?.impuesto_porcentaje !== undefined) {
+      return parseFloat(editedItems[item.item_id].impuesto_porcentaje) || 0;
+    }
+    return parseFloat(item.servicio?.impuesto?.porcentaje || 0);
+  };
+  const getItemTotalConIva = (item) => {
+    const subtotal = getItemSubtotal(item);
+    const iva = getItemIvaPorcentaje(item);
+    return subtotal + (subtotal * iva / 100);
+  };
+  const handleItemEdit = (itemId, field, value) => {
+    setEditedItems(prev => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], [field]: value }
+    }));
+  };
+
   const loadPrefijos = async () => {
     try {
       const data = await facturacionService.getPrefijos();
@@ -43,18 +73,17 @@ const FacturacionView = () => {
 
   const loadPendientes = async () => {
     setLoading(true);
+    setEditedItems({}); // Limpiar overrides al recargar
     try {
       const data = await facturacionService.getPendientes(filters.lapso_inicio, filters.lapso_fin, filters.tercero);
       setOrdenes(data);
+      setExpandedOrdenes({}); // Colapsar todas al recargar
       
-      // Pre-seleccionar todos los items validos (saldo > 0)
+      // Pre-seleccionar todos los items activos (el usuario puede editar el precio de los que valen $0)
       const todosLosItems = [];
       data.forEach(orden => {
-        orden.items.forEach(item => {
-          // Solo preseleccionar si tiene valor monetario significativo
-          if (parseFloat(item.subtotal) > 0.01) {
-            todosLosItems.push(item.item_id);
-          }
+        orden.items.filter(i => i.estado === '1' || i.estado === 1).forEach(item => {
+          todosLosItems.push(item.item_id);
         });
       });
       setSelectedItems(todosLosItems);
@@ -66,7 +95,7 @@ const FacturacionView = () => {
   };
 
   const handleSelectAll = (orden) => {
-    const itemIds = orden.items.map(i => i.item_id);
+    const itemIds = orden.items.filter(i => i.estado === '1' || i.estado === 1).map(i => i.item_id);
     const allSelected = itemIds.every(id => selectedItems.includes(id));
 
     if (allSelected) {
@@ -120,6 +149,12 @@ const FacturacionView = () => {
     
     if (itemsOrden.length === 0) return Swal.fire('Atención', 'Seleccione al menos un ítem para facturar', 'warning');
 
+    // Validar que todos los ítems seleccionados tengan precio > 0
+    const sinPrecio = itemsOrden.filter(i => getItemSubtotal(i) <= 0.01);
+    if (sinPrecio.length > 0) {
+      return Swal.fire('Atención', `${sinPrecio.length} ítem(s) seleccionado(s) tienen precio $0. Ingrese un precio antes de facturar.`, 'warning');
+    }
+
     const result = await Swal.fire({
       title: '¿Generar Factura?',
       text: `Se facturarán ${itemsOrden.length} ítems de la orden ${orden.numero_orden} para ${periodo.label}.`,
@@ -130,6 +165,15 @@ const FacturacionView = () => {
     });
 
     if (result.isConfirmed) {
+      setGenerando(true);
+      Swal.fire({
+        title: 'Generando factura...',
+        html: '<p>Creando factura y enviando a DataIco / DIAN.<br>Por favor espere.</p>',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => Swal.showLoading()
+      });
       try {
         const fechaPeriodoInicio = new Date(periodo.anio, periodo.mes - 1, 1);
         const fechaPeriodoFin = new Date(periodo.anio, periodo.mes, 0);
@@ -138,7 +182,12 @@ const FacturacionView = () => {
           documento_id: prefijoSelected,
           tercero_id: orden.tercero_id,
           tipo_id_tercero: orden.tipo_id_tercero,
-          items: itemsOrden.map(item => ({ item_id: item.item_id })),
+          items: itemsOrden.map(item => ({
+            item_id: item.item_id,
+            cantidad: parseFloat(getItemCantidad(item)),
+            precio_unitario: parseFloat(getItemPrecio(item)),
+            observacion: getItemObservacion(item),
+          })),
           observacion: `Facturación ${periodo.label}`,
           fecha_periodo_inicio: fechaPeriodoInicio.toISOString().split('T')[0],
           fecha_periodo_fin: fechaPeriodoFin.toISOString().split('T')[0]
@@ -147,8 +196,8 @@ const FacturacionView = () => {
         const response = await facturacionService.generarFactura(payload);
         
         Swal.fire({
-          title: 'Éxito',
-          html: `<p>Factura generada correctamente</p><p><strong>Número:</strong> ${response.factura.prefijo}-${response.factura.factura_fiscal}</p><p><strong>CUFE:</strong> ${response.factura.cufe || 'Pendiente'}</p>`,
+          title: '¡Factura generada!',
+          html: `<p>Factura generada y enviada correctamente.</p><p><strong>Número:</strong> ${response.factura.prefijo}-${response.factura.factura_fiscal}</p><p><strong>CUFE:</strong> ${response.factura.cufe || 'Pendiente'}</p>`,
           icon: 'success',
           confirmButtonText: 'Aceptar'
         });
@@ -159,6 +208,8 @@ const FacturacionView = () => {
         loadPendientes();
       } catch (error) {
         Swal.fire('Error', error.response?.data?.message || 'Error al generar la factura', 'error');
+      } finally {
+        setGenerando(false);
       }
     }
   };
@@ -325,91 +376,169 @@ const FacturacionView = () => {
             <Alert variant="info" className="text-center">No hay órdenes pendientes por facturar para este criterio.</Alert>
           ) : (
             <>
-              {ordenes.map(orden => (
-                <Card key={orden.orden_servicio_id} className="mb-4 border-primary">
-                  <Card.Header className="bg-dark text-white d-flex justify-content-between align-items-center py-2">
-                    <div>
-                      <Form.Check 
-                        type="checkbox"
-                        inline
-                        id={`check-orden-${orden.orden_servicio_id}`}
-                        label={<span className="text-white fw-bold">Orden: {orden.numero_orden}</span>}
-                        checked={orden.items.every(i => selectedItems.includes(i.item_id))}
-                        onChange={() => handleSelectAll(orden)}
-                      />
-                      <span className="ms-3 text-warning fw-bold border-start ps-3">
-                        TERCERO: {orden.tercero?.nombre_tercero}
-                      </span>
-                    </div>
-                    {getPeriodoFacturable(orden) ? (
-                      <Badge bg="success">Período: {getPeriodoFacturable(orden).label}</Badge>
-                    ) : (
-                      <Badge bg="danger">Fuera de período</Badge>
-                    )}
-                  </Card.Header>
-                  <Table size="sm" responsive className="mb-0 bg-white">
-                    <thead>
-                      <tr>
-                        <th width="40"></th>
-                        <th>Servicio</th>
-                        <th className="text-center">Cant.</th>
-                        <th className="text-end">Precio Unit.</th>
-                        <th className="text-end">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orden.items.map(item => (
-                        <tr key={item.item_id}>
-                          <td className="text-center">
-                            <Form.Check 
-                              type="checkbox"
-                              checked={selectedItems.includes(item.item_id)}
-                              onChange={() => handleSelectItem(item.item_id)}
-                              // Deshabilitar selección si el item vale 0
-                              disabled={parseFloat(item.subtotal || 0) <= 0.01}
-                            />
-                          </td>
-                          <td>
-                            {item.nombre_servicio}
-                            {parseFloat(item.subtotal || 0) <= 0.01 && (
-                              <Badge bg="secondary" className="ms-2">Sin costo</Badge>
-                            )}
-                          </td>
-                          <td className="text-center">{item.cantidad}</td>
-                          <td className="text-end text-success">{formatCurrency(item.precio_unitario)}</td>
-                          <td className="text-end fw-bold">{formatCurrency(item.subtotal)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                  <Card.Footer className="bg-light d-flex justify-content-end p-3">
-                    {(() => {
-                      const itemsSeleccionados = orden.items.filter(i => selectedItems.includes(i.item_id));
-                      const totalSeleccionado = itemsSeleccionados.reduce((acc, item) => acc + (parseFloat(item.subtotal) || 0), 0);
-
-                      // Solo mostrar botón si hay items y el total es significativamente mayor a 0
-                      if (itemsSeleccionados.length > 0 && totalSeleccionado > 0.01) {
-                        return (
-                          <div className="d-flex align-items-center gap-3">
-                            <span className="fw-bold text-dark me-2">
-                              Total a facturar: {formatCurrency(totalSeleccionado)}
-                            </span>
-                            <Button
-                              variant="success"
-                              size="sm"
-                              onClick={() => handleFacturarOrden(orden)}
-                            >
-                              <i className="fas fa-file-invoice-dollar me-2"></i>
-                              GENERAR FACTURA ({itemsSeleccionados.length} ítems)
-                            </Button>
+              {ordenes.map(orden => {
+                    const itemsOrden = orden.items.filter(i => i.estado === '1' || i.estado === 1);
+                    const itemsSeleccionados = itemsOrden.filter(i => selectedItems.includes(i.item_id));
+                    const totalSeleccionado = itemsSeleccionados.reduce((acc, item) => acc + getItemSubtotal(item), 0);
+                    const haySinPrecio = itemsSeleccionados.some(i => getItemSubtotal(i) <= 0.01);
+                    const periodo = getPeriodoFacturable(orden);
+                    const isExpanded = !!expandedOrdenes[orden.orden_servicio_id];
+                    return (
+                      <Card key={orden.orden_servicio_id} className="mb-3 border-primary">
+                        {/* ── ENCABEZADO SIEMPRE VISIBLE ── */}
+                        <Card.Header
+                          className="bg-dark text-white py-2"
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setExpandedOrdenes(prev => ({ ...prev, [orden.orden_servicio_id]: !prev[orden.orden_servicio_id] }))}
+                        >
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div className="d-flex align-items-center gap-3">
+                              {/* Checkbox seleccionar todos - detener propagación para no abrir/cerrar */}
+                              <span onClick={e => e.stopPropagation()}>
+                                <Form.Check
+                                  type="checkbox"
+                                  inline
+                                  id={`check-orden-${orden.orden_servicio_id}`}
+                                  label={<span className="text-white fw-bold">Orden: {orden.numero_orden}</span>}
+                                  checked={itemsOrden.length > 0 && itemsOrden.every(i => selectedItems.includes(i.item_id))}
+                                  onChange={() => handleSelectAll(orden)}
+                                />
+                              </span>
+                              <span className="text-warning fw-bold border-start ps-3">
+                                TERCERO: {orden.tercero?.nombre_tercero}
+                              </span>
+                            </div>
+                            <div className="d-flex align-items-center gap-2">
+                              {periodo ? (
+                                <Badge bg="success">Período: {periodo.label}</Badge>
+                              ) : (
+                                <Badge bg="danger">Fuera de período</Badge>
+                              )}
+                              <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-white ms-2`}></i>
+                            </div>
                           </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </Card.Footer>
-                </Card>
-              ))}
+                          {orden.observaciones && (
+                            <div className="mt-2 border-top border-secondary pt-2">
+                              <small className="text-white-50 text-uppercase fw-bold me-2" style={{ letterSpacing: '0.05em' }}>
+                                <i className="fas fa-sticky-note me-1"></i>Observaciones:
+                              </small>
+                              <span className="text-white fst-italic small">{orden.observaciones}</span>
+                            </div>
+                          )}
+                        </Card.Header>
+
+                        {/* ── ITEMS: solo visibles si está expandido ── */}
+                        {isExpanded && (
+                          <>
+                            <Table size="sm" responsive className="mb-0 bg-white">
+                              <thead>
+                                <tr>
+                                  <th width="40"></th>
+                                  <th>Servicio</th>
+                                  <th className="text-center" style={{ width: '100px' }}>Cant.</th>
+                                  <th className="text-end" style={{ width: '140px' }}>Precio Unit.</th>
+                                  <th className="text-end" style={{ width: '110px' }}>Subtotal</th>
+                                  <th className="text-center" style={{ width: '80px' }}>% IVA</th>
+                                  <th className="text-end" style={{ width: '130px' }}>Total c/IVA</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {itemsOrden.map(item => (
+                                  <tr key={item.item_id}>
+                                    <td className="text-center">
+                                      <Form.Check
+                                        type="checkbox"
+                                        checked={selectedItems.includes(item.item_id)}
+                                        onChange={() => handleSelectItem(item.item_id)}
+                                      />
+                                    </td>
+                                    <td>
+                                      {item.nombre_servicio}
+                                      {getItemSubtotal(item) <= 0.01 && (
+                                        <Badge bg="warning" text="dark" className="ms-2">Sin precio</Badge>
+                                      )}
+                                      <Form.Control
+                                        type="text"
+                                        size="sm"
+                                        className="mt-1"
+                                        placeholder="Observaciones..."
+                                        value={getItemObservacion(item)}
+                                        onChange={(e) => handleItemEdit(item.item_id, 'observacion', e.target.value)}
+                                      />
+                                    </td>
+                                    <td className="text-center">
+                                      <Form.Control
+                                        type="number"
+                                        size="sm"
+                                        step="0.01"
+                                        min="0.01"
+                                        value={getItemCantidad(item)}
+                                        onChange={(e) => handleItemEdit(item.item_id, 'cantidad', e.target.value)}
+                                        style={{ width: '80px', display: 'inline-block' }}
+                                      />
+                                    </td>
+                                    <td className="text-end">
+                                      <Form.Control
+                                        type="number"
+                                        size="sm"
+                                        step="0.01"
+                                        min="0"
+                                        value={getItemPrecio(item)}
+                                        onChange={(e) => handleItemEdit(item.item_id, 'precio_unitario', e.target.value)}
+                                        style={{ width: '120px', display: 'inline-block', textAlign: 'right' }}
+                                      />
+                                    </td>
+                                    <td className="text-end fw-bold text-success">{formatCurrency(getItemSubtotal(item))}</td>
+                                    <td className="text-center">
+                                      <Form.Control
+                                        type="number"
+                                        size="sm"
+                                        step="0.5"
+                                        min="0"
+                                        max="100"
+                                        value={getItemIvaPorcentaje(item)}
+                                        onChange={(e) => handleItemEdit(item.item_id, 'impuesto_porcentaje', e.target.value)}
+                                        style={{ width: '70px', display: 'inline-block', textAlign: 'right' }}
+                                      />
+                                    </td>
+                                    <td className="text-end fw-bold text-primary">{formatCurrency(getItemTotalConIva(item))}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </Table>
+                            <Card.Footer className="bg-light d-flex justify-content-end align-items-center gap-3 p-3">
+                              {itemsSeleccionados.length > 0 && (
+                                <>
+                                  <span className="fw-bold text-dark">
+                                    Total a facturar: {formatCurrency(totalSeleccionado)}
+                                  </span>
+                                  {haySinPrecio ? (
+                                    <small className="text-warning">
+                                      <i className="fas fa-exclamation-triangle me-1"></i>
+                                      Hay ítems sin precio
+                                    </small>
+                                  ) : (
+                                    <Button
+                                      variant="success"
+                                      size="sm"
+                                      onClick={() => handleFacturarOrden(orden)}
+                                      disabled={generando}
+                                    >
+                                      {generando ? (
+                                        <><Spinner animation="border" size="sm" className="me-2" />Generando...</>
+                                      ) : (
+                                        <><i className="fas fa-file-invoice-dollar me-2"></i>GENERAR FACTURA ({itemsSeleccionados.length} ítems)</>
+                                      )}
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                            </Card.Footer>
+                          </>
+                        )}
+                      </Card>
+                    );
+                  })}
             </>
           )}
         </Card.Body>

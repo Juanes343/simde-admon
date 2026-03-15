@@ -212,11 +212,11 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
       return;
     }
 
-    // Verificar si ya existe
-    if (items.find(item => item.servicio_id === servicio.servicio_id)) {
-      toast.warning('El servicio ya fue agregado');
-      return;
-    }
+    // // Verificar si ya existe
+    // if (items.find(item => item.servicio_id === servicio.servicio_id)) {
+    //   toast.warning('El servicio ya fue agregado');
+    //   return;
+    // }
 
     const cantidadNum = parseFloat(cantidad);
     const subtotal = cantidadNum * parseFloat(servicio.precio_unitario);
@@ -360,6 +360,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     const data = {
       ...formData,
       items: items.map(item => ({
+        item_id: item.item_id || null,
         servicio_id: item.servicio_id,
         cantidad: item.cantidad,
         precio_unitario: item.precio_unitario,
