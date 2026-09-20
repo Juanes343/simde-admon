@@ -41,7 +41,7 @@ return [
         'dataico_account_id' => env('DATAICO_ACCOUNT_ID', '936111eb-bbd2-4752-8b6e-fdc1d24f8e96'),
         
         // Token de autenticación para las peticiones a DataIco
-        'token' => env('DATAICO_TOKEN', 'ab95a878f7ea1a22410f37e1de209deb'),
+        'token' => env('DATAICO_TOKEN'),
         
         // URL base del API de DataIco (sin trailing slash)
         'base_url' => env('DATAICO_BASE_URL', 'https://api.dataico.com/direct/dataico_api/v2'),

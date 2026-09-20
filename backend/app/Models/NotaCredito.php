@@ -18,6 +18,7 @@ class NotaCredito extends Model
         'concepto_id',
         'valor_nota',
         'observacion',
+        'usuario_id',
         'tipo_id_tercero',
         'tercero_id',
         'tipo_factura',
@@ -44,6 +45,14 @@ class NotaCredito extends Model
     public function concepto()
     {
         return $this->belongsTo(NotaCreditoConcepto::class, 'concepto_id');
+    }
+
+    /**
+     * Relación: Usuario que creó la nota crédito
+     */
+    public function usuario()
+    {
+        return $this->belongsTo(SystemUsuario::class, 'usuario_id', 'usuario_id');
     }
 
     /**

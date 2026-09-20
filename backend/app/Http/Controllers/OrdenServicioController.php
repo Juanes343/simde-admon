@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\OrdenServicio;
 use App\Models\OrdenServicioItem;
+use App\Models\FacFacturaItem;
 use App\Models\Servicio;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
@@ -92,6 +93,7 @@ class OrdenServicioController extends Controller
             'items.*.cantidad' => 'required|numeric|min:0.01',
             'items.*.precio_unitario' => 'nullable|numeric|min:0',
             'items.*.observaciones' => 'nullable|string',
+            'items.*.porcentaje_descuento' => 'nullable|numeric|min:0|max:100',
         ], [
             'tipo_id_tercero.required' => 'El tipo de identificación es obligatorio',
             'tercero_id.required' => 'El tercero es obligatorio',
@@ -144,6 +146,8 @@ class OrdenServicioController extends Controller
                     'precio_unitario' => $itemData['precio_unitario'] ?? $servicio->precio_unitario,
                     'orden' => $ordenItem++,
                     'observaciones' => $itemData['observaciones'] ?? null,
+                    'porcentaje_soltec' => $itemData['porcentaje_soltec'] ?? 0,
+                    'porcentaje_descuento' => $itemData['porcentaje_descuento'] ?? 0,
                 ]);
             }
 
@@ -181,6 +185,17 @@ class OrdenServicioController extends Controller
             $orden->total = $orden->calcularTotal();
             $orden->permite_facturar_hoy = $orden->permiteFacturar();
 
+            // Añadir campo 'facturado' a cada item
+            $itemIds = $orden->items->pluck('item_id')->toArray();
+            $facturadosIds = DB::table('fac_facturas_items')
+                ->whereIn('item_id', $itemIds)
+                ->pluck('item_id')
+                ->unique()
+                ->toArray();
+            $orden->items->each(function ($item) use ($facturadosIds) {
+                $item->facturado = in_array($item->item_id, $facturadosIds);
+            });
+
             return response()->json($orden);
         } catch (\Exception $e) {
             return response()->json([
@@ -215,6 +230,8 @@ class OrdenServicioController extends Controller
             'items.*.cantidad' => 'required|numeric|min:0.01',
             'items.*.precio_unitario' => 'nullable|numeric|min:0',
             'items.*.observaciones' => 'nullable|string',
+            'items.*.porcentaje_soltec' => 'nullable|numeric|min:0|max:100',
+            'items.*.porcentaje_descuento' => 'nullable|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -238,14 +255,38 @@ class OrdenServicioController extends Controller
 
             // Si se enviaron items, actualizar
             if ($request->has('items')) {
-                // Eliminar items antiguos
-                $orden->items()->delete();
+                // Obtener IDs de items ya facturados para preservarlos
+                $itemsFacturados = FacFacturaItem::where('orden_servicio_id', $orden->orden_servicio_id)
+                    ->pluck('item_id')
+                    ->unique()
+                    ->toArray();
 
-                // Crear nuevos items
+                // Eliminar solo los items que NO han sido facturados
+                $orden->items()
+                    ->whereNotIn('item_id', $itemsFacturados)
+                    ->delete();
+
+                // Crear nuevos items (omitir los que ya están facturados y fueron preservados)
                 $ordenItem = 1;
                 foreach ($request->items as $itemData) {
+                    // Si el item ya está facturado, actualizar sus campos sin eliminar/recrear
+                    if (!empty($itemData['item_id']) && in_array($itemData['item_id'], $itemsFacturados)) {
+                        $existingItem = OrdenServicioItem::find($itemData['item_id']);
+                        if ($existingItem) {
+                            $existingItem->cantidad          = $itemData['cantidad'];
+                            $existingItem->precio_unitario   = $itemData['precio_unitario'] ?? $existingItem->precio_unitario;
+                            $existingItem->observaciones     = $itemData['observaciones'] ?? $existingItem->observaciones;
+                            $existingItem->porcentaje_soltec = $itemData['porcentaje_soltec'] ?? $existingItem->porcentaje_soltec;
+                            $existingItem->porcentaje_descuento = $itemData['porcentaje_descuento'] ?? $existingItem->porcentaje_descuento;
+                            $existingItem->orden             = $ordenItem;
+                            $existingItem->save(); // boot() recalcula subtotal automáticamente
+                        }
+                        $ordenItem++;
+                        continue;
+                    }
+
                     $servicio = Servicio::find($itemData['servicio_id']);
-                    
+
                     OrdenServicioItem::create([
                         'orden_servicio_id' => $orden->orden_servicio_id,
                         'servicio_id' => $servicio->servicio_id,
@@ -256,6 +297,8 @@ class OrdenServicioController extends Controller
                         'precio_unitario' => $itemData['precio_unitario'] ?? $servicio->precio_unitario,
                         'orden' => $ordenItem++,
                         'observaciones' => $itemData['observaciones'] ?? null,
+                        'porcentaje_soltec' => $itemData['porcentaje_soltec'] ?? 0,
+                        'porcentaje_descuento' => $itemData['porcentaje_descuento'] ?? 0,
                     ]);
                 }
             }
@@ -291,19 +334,7 @@ class OrdenServicioController extends Controller
 
         try {
             $item = OrdenServicioItem::findOrFail($item_id);
-            
-            // Validar si está facturado
-            $facturado = DB::table('fac_facturas_items')
-                ->where('item_id', $item_id)
-                ->exists();
-            
-            if ($facturado && $validated['estado'] === '0') {
-                return response()->json([
-                    'message' => 'No se puede inactivar un item que ya está facturado',
-                    'error' => true
-                ], 422);
-            }
-            
+
             $item->estado = $validated['estado'];
             $item->save();
             
@@ -314,6 +345,38 @@ class OrdenServicioController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'message' => 'Error al cambiar estado del item',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Eliminar un item de orden de servicio (solo si no está facturado)
+     */
+    public function deleteItem($item_id)
+    {
+        try {
+            $item = OrdenServicioItem::findOrFail($item_id);
+
+            $facturado = DB::table('fac_facturas_items')
+                ->where('item_id', $item_id)
+                ->exists();
+
+            if ($facturado) {
+                return response()->json([
+                    'message' => 'No se puede eliminar un item que ya está facturado',
+                    'error' => true
+                ], 422);
+            }
+
+            $item->delete();
+
+            return response()->json([
+                'message' => 'Item eliminado correctamente'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error al eliminar el item',
                 'error' => $e->getMessage()
             ], 500);
         }

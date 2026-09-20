@@ -64,6 +64,7 @@ class ServicioController extends Controller
             'tipo_unidad' => 'required|in:UNIDAD,HORAS',
             'precio_unitario' => 'required|numeric|min:0',
             'impuesto_id' => 'nullable|exists:impuestos,impuesto_id',
+            'porcentaje_soltec' => 'nullable|numeric|min:0|max:100',
         ], [
             'nombre_servicio.required' => 'El nombre del servicio es obligatorio',
             'tipo_unidad.required' => 'El tipo de unidad es obligatorio',
@@ -129,6 +130,7 @@ class ServicioController extends Controller
             'tipo_unidad' => 'sometimes|required|in:UNIDAD,HORAS',
             'precio_unitario' => 'sometimes|required|numeric|min:0',
             'impuesto_id' => 'nullable|exists:impuestos,impuesto_id',
+            'porcentaje_soltec' => 'nullable|numeric|min:0|max:100',
         ]);
 
         if ($validator->fails()) {
