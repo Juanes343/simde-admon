@@ -17,6 +17,7 @@ class Servicio extends Model
         'tipo_unidad',
         'precio_unitario',
         'impuesto_id',
+        'porcentaje_soltec',
         'sw_estado',
         'usuario_id',
     ];
@@ -24,6 +25,7 @@ class Servicio extends Model
     protected $casts = [
         'cantidad' => 'decimal:2',
         'precio_unitario' => 'decimal:2',
+        'porcentaje_soltec' => 'decimal:2',
         'fecha_registro' => 'datetime',
     ];
 

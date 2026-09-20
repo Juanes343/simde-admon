@@ -77,4 +77,13 @@ class SystemUsuario extends Authenticatable
     {
         return $this->hasMany(Tercero::class, 'usuario_id', 'usuario_id');
     }
+
+    /**
+     * Relación con módulos asignados
+     */
+    public function modulos()
+    {
+        return $this->hasMany(SystemUsuarioModulo::class, 'usuario_id', 'usuario_id')
+                    ->where('activo', true);
+    }
 }

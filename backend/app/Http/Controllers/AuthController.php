@@ -104,6 +104,16 @@ class AuthController extends Controller
      */
     public function me(Request $request)
     {
-        return response()->json($request->user());
+        $user = $request->user();
+        try {
+            if ($user->sw_admin === '1' || $user->sw_admin === 1) {
+                $modulos = ['terceros', 'servicios', 'ordenes', 'facturacion', 'notas', 'usuarios', 'causacion', 'cotizaciones'];
+            } else {
+                $modulos = $user->modulos()->pluck('modulo_id')->toArray();
+            }
+        } catch (\Exception $e) {
+            $modulos = [];
+        }
+        return response()->json(array_merge($user->toArray(), ['modulos' => $modulos]));
     }
 }

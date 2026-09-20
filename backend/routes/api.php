@@ -16,6 +16,10 @@ use App\Http\Controllers\ElectronicInvoicingController;
 use App\Http\Controllers\ElectronicInvoiceDownloadController;
 use App\Http\Controllers\NotaCreditoController;
 use App\Http\Controllers\FirmaDigitalController;
+use App\Http\Controllers\FacturaExternaController;
+use App\Http\Controllers\UsuarioModuloController;
+use App\Http\Controllers\CausacionController;
+use App\Http\Controllers\CotizacionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -44,6 +48,9 @@ Route::get('/facturacion/pendientes', [FacturacionController::class, 'getPendien
 Route::get('/facturacion/facturas', [FacturacionController::class, 'getFacturas']);
 Route::post('/facturacion/facturar', [FacturacionController::class, 'facturar']);
 
+// Plantilla CSV pública (no requiere autenticación)
+Route::get('/facturas-externas/plantilla-csv', [FacturaExternaController::class, 'plantillaCsv']);
+
 // Catálogos ubicación (pueden ser públicos si se requieren en el registro)
 Route::get('/ubicacion/paises', [UbicacionController::class, 'getPaises']);
 Route::get('/ubicacion/departamentos/{paisId}', [UbicacionController::class, 'getDepartamentos']);
@@ -58,6 +65,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // Auth
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
+
+    // Módulos / Permisos de usuario
+    Route::get('/modulos', [UsuarioModuloController::class, 'catalogos']);
+    Route::get('/usuarios', [UsuarioModuloController::class, 'listarUsuarios']);
+    Route::get('/usuarios/{id}/modulos', [UsuarioModuloController::class, 'index']);
+    Route::put('/usuarios/{id}/modulos', [UsuarioModuloController::class, 'update']);
+    Route::patch('/usuarios/{id}/activo', [UsuarioModuloController::class, 'toggleActivo']);
+    Route::patch('/usuarios/{id}/admin', [UsuarioModuloController::class, 'toggleAdmin']);
 
     // Órdenes de Servicio - Firma Digital (Admin)
     Route::post('/ordenes-servicio/{id}/solicitar-firma', [FirmaDigitalController::class, 'solicitarFirma']);
@@ -116,6 +131,41 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notas-credito/{id}', [NotaCreditoController::class, 'show']);
     Route::post('/notas-credito/{id}/enviar', [NotaCreditoController::class, 'enviar']);
     Route::delete('/notas-credito/{id}', [NotaCreditoController::class, 'destroy']);
+
+    // Notas Crédito - Conceptos (gestión)
+    Route::get('/notas-credito-conceptos/all', [NotaCreditoController::class, 'conceptosAll']);
+    Route::post('/notas-credito-conceptos', [NotaCreditoController::class, 'storeConcepto']);
+    Route::put('/notas-credito-conceptos/{id}', [NotaCreditoController::class, 'updateConcepto']);
+    Route::delete('/notas-credito-conceptos/{id}', [NotaCreditoController::class, 'destroyConcepto']);
     
     // Cambiar estado de items de orden de servicio
+    Route::post('/orden-servicio-items/{id}/cambiar-estado', [OrdenServicioController::class, 'cambiarEstadoItem']);
+    Route::delete('/orden-servicio-items/{id}', [OrdenServicioController::class, 'deleteItem']);
+
+    // Facturas Externas (carga masiva por CSV)
+    Route::post('/facturas-externas/upload', [FacturaExternaController::class, 'uploadCsv']);
+    Route::get('/facturas-externas', [FacturaExternaController::class, 'index']);
+    Route::get('/facturas-externas/{id}', [FacturaExternaController::class, 'show']);
+    Route::delete('/facturas-externas/{id}', [FacturaExternaController::class, 'destroy']);
+
+    // Causación (pagos y anticipos)
+    Route::get('/causacion/anticipos',           [CausacionController::class, 'getAnticipo']);
+    Route::post('/causacion/anticipos',           [CausacionController::class, 'upsertAnticipo']);
+    Route::get('/causacion/facturas-pendientes',  [CausacionController::class, 'getFacturasPendientes']);
+    Route::post('/causacion/registrar-pagos',     [CausacionController::class, 'registrarPagos']);
+    Route::get('/causacion/pagos',                [CausacionController::class, 'getPagos']);
+    Route::put('/causacion/pagos/{id}',           [CausacionController::class, 'actualizarPago']);
+    Route::get('/causacion/reporte',              [CausacionController::class, 'reporte']);
+    Route::get('/causacion/reporte/excel',        [CausacionController::class, 'reporteExcel']);
+
+    // Cotizaciones
+    Route::get('/cotizaciones',                          [CotizacionController::class, 'index']);
+    Route::post('/cotizaciones',                         [CotizacionController::class, 'store']);
+    Route::get('/cotizaciones/{id}',                     [CotizacionController::class, 'show']);
+    Route::put('/cotizaciones/{id}',                     [CotizacionController::class, 'update']);
+    Route::delete('/cotizaciones/{id}',                  [CotizacionController::class, 'destroy']);
+    Route::patch('/cotizaciones/{id}/estado',            [CotizacionController::class, 'cambiarEstado']);
+    Route::post('/cotizaciones/{id}/convertir',          [CotizacionController::class, 'convertirAOrden']);
+    Route::get('/cotizaciones/{id}/pdf',                 [CotizacionController::class, 'descargarPdf']);
+    Route::post('/cotizaciones/{id}/enviar-email',       [CotizacionController::class, 'enviarEmail']);
 });

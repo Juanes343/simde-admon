@@ -25,6 +25,9 @@ class FacFactura extends Model
         'response_dataico',
         'fecha_respuesta_dataico',
         'total_factura',
+        'gravamen',
+        'porcentaje_ret_fuente',
+        'valor_ret_fuente',
         'saldo',
         'documento_id',
         'tipo_id_tercero',
@@ -44,6 +47,9 @@ class FacFactura extends Model
         'fecha_periodo_fin' => 'datetime',
         'response_dataico' => 'array',
         'total_factura' => 'decimal:2',
+        'gravamen' => 'decimal:2',
+        'porcentaje_ret_fuente' => 'decimal:2',
+        'valor_ret_fuente' => 'decimal:2',
     ];
 
     /**
@@ -76,6 +82,15 @@ class FacFactura extends Model
     public function auditorias(): HasMany
     {
         return $this->hasMany(AuditoriaDataIco::class, 'factura_fiscal_id', 'factura_fiscal_id');
+    }
+
+    /**
+     * Relación HasOne con la última auditoría (eager-loadable para listas)
+     */
+    public function ultimaAuditoriaRel()
+    {
+        return $this->hasOne(AuditoriaDataIco::class, 'factura_fiscal_id', 'factura_fiscal_id')
+                    ->ofMany('id_auditoria_dataico', 'max');
     }
 
     /**

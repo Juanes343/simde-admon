@@ -21,12 +21,16 @@ class OrdenServicioItem extends Model
         'orden',
         'observaciones',
         'estado',
+        'porcentaje_soltec',
+        'porcentaje_descuento',
     ];
 
     protected $casts = [
         'cantidad' => 'decimal:2',
         'precio_unitario' => 'decimal:2',
         'subtotal' => 'decimal:2',
+        'porcentaje_soltec' => 'decimal:2',
+        'porcentaje_descuento' => 'decimal:2',
     ];
 
     /**

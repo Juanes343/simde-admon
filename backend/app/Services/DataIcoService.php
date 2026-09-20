@@ -57,4 +57,59 @@ class DataIcoService
             ];
         }
     }
+
+    /**
+     * Consulta un documento en DataIco por UUID o referencia (prefijo+numero).
+     */
+    public function getDocumentByReference(string $endpoint, string $prefix, string $number, string $token, ?string $uuid = null): array
+    {
+        $baseUrl = config('services.dataico.base_url', 'https://api.dataico.com/direct/dataico_api/v2');
+
+        $candidates = [];
+        if (!empty($uuid)) {
+            $candidates[] = "{$baseUrl}/{$endpoint}/{$uuid}";
+        }
+        $candidates[] = "{$baseUrl}/{$endpoint}/{$prefix}{$number}";
+        $candidates[] = "{$baseUrl}/{$endpoint}/{$prefix}-{$number}";
+
+        $lastError = null;
+
+        foreach ($candidates as $url) {
+            try {
+                $response = Http::withHeaders([
+                    'Auth-Token' => $token,
+                    'Content-Type' => 'application/json',
+                ])->acceptJson()->get($url);
+
+                if ($response->successful()) {
+                    return [
+                        'success' => true,
+                        'data' => $response->json(),
+                        'source_url' => $url,
+                    ];
+                }
+
+                if ($response->status() !== 404) {
+                    $lastError = [
+                        'status' => $response->status(),
+                        'errors' => $response->json(),
+                        'raw_body' => $response->body(),
+                        'source_url' => $url,
+                    ];
+                }
+            } catch (\Exception $e) {
+                $lastError = [
+                    'status' => 0,
+                    'message' => $e->getMessage(),
+                    'source_url' => $url,
+                ];
+            }
+        }
+
+        return [
+            'success' => false,
+            'message' => 'Documento no encontrado en DataIco por referencia',
+            'error_detail' => $lastError,
+        ];
+    }
 }
