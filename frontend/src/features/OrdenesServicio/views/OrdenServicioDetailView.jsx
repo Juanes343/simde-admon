@@ -109,6 +109,7 @@ const OrdenServicioDetailView = ({ orden }) => {
                 <th>Servicio</th>
                 <th style={{ width: '100px' }} className="text-center">Cantidad</th>
                 <th style={{ width: '130px' }} className="text-end">Precio Unitario</th>
+                <th style={{ width: '90px' }} className="text-center">% Desc</th>
                 <th style={{ width: '110px' }} className="text-end">Subtotal</th>
                 <th style={{ width: '200px' }}>Observaciones</th>
               </tr>
@@ -133,6 +134,13 @@ const OrdenServicioDetailView = ({ orden }) => {
                   <td className="text-end align-middle">
                     {formatCurrency(item.precio_unitario)}
                   </td>
+                  <td className="text-center align-middle">
+                    {parseFloat(item.porcentaje_descuento) > 0 ? (
+                      <Badge bg="warning" text="dark">{parseFloat(item.porcentaje_descuento)}%</Badge>
+                    ) : (
+                      <small className="text-muted">—</small>
+                    )}
+                  </td>
                   <td className="text-end align-middle">
                     <strong>{formatCurrency(item.subtotal)}</strong>
                   </td>
@@ -148,7 +156,7 @@ const OrdenServicioDetailView = ({ orden }) => {
             </tbody>
             <tfoot className="table-secondary">
               <tr>
-                <td colSpan="4" className="text-end">
+                <td colSpan="5" className="text-end">
                   <strong>TOTAL:</strong>
                 </td>
                 <td className="text-end">

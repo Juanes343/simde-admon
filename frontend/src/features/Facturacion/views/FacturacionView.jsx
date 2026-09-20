@@ -43,17 +43,34 @@ const FacturacionView = () => {
     return c * p;
   };
   const getItemObservacion = (item) => editedItems[item.item_id]?.observacion ?? (item.observaciones || '');
+  const getItemDescuento = (item) => {
+    if (editedItems[item.item_id]?.porcentaje_descuento !== undefined) {
+      return parseFloat(editedItems[item.item_id].porcentaje_descuento) || 0;
+    }
+    return parseFloat(item.porcentaje_descuento) || 0;
+  };
+  const getItemDescuentoValor = (item) => {
+    return getItemSubtotal(item) * getItemDescuento(item) / 100;
+  };
+  const getItemBaseGravable = (item) => {
+    return getItemSubtotal(item) - getItemDescuentoValor(item);
+  };
   const getItemIvaPorcentaje = (item) => {
     if (editedItems[item.item_id]?.impuesto_porcentaje !== undefined) {
       return parseFloat(editedItems[item.item_id].impuesto_porcentaje) || 0;
     }
     return parseFloat(item.servicio?.impuesto?.porcentaje || 0);
   };
-  const getItemTotalConIva = (item) => {
-    const subtotal = getItemSubtotal(item);
-    const iva = getItemIvaPorcentaje(item);
-    return subtotal + (subtotal * iva / 100);
-  };
+  const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+  const formatMoney2 = (n) => new Intl.NumberFormat('es-CO', {
+    style: 'currency', currency: 'COP', minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(n || 0);
+  const getItemIvaValor = (item) => round2(getItemBaseGravable(item) * getItemIvaPorcentaje(item) / 100);
+  const getItemTotalConIva = (item) => getItemBaseGravable(item) + getItemIvaValor(item);
+  // Retención en la fuente: el porcentaje viene de la orden de servicio
+  const getRetPorcentaje = (orden) => parseFloat(orden.porcentaje_ret_fuente) || 0;
+  const getItemRetencion = (item, retPct) => round2(getItemBaseGravable(item) * retPct / 100);
+  const getItemTotalNeto = (item, retPct) => getItemTotalConIva(item) - getItemRetencion(item, retPct);
   const handleItemEdit = (itemId, field, value) => {
     setEditedItems(prev => ({
       ...prev,
@@ -114,6 +131,12 @@ const FacturacionView = () => {
   };
 
   const getPeriodoFacturable = (orden) => {
+    // EXCEPCION TEMPORAL (revertida): la orden OS-2026-000079 no se facturó en agosto (se pasó el mes).
+    // Se facturó manualmente con período Agosto 2026 el 2026-09-02. Ya se generó esa factura, por eso queda comentado.
+    // if (orden.numero_orden === 'OS-2026-000079') {
+    //   return { mes: 8, nombre: 'Agosto', anio: 2026, label: 'Agosto 2026' };
+    // }
+
     const hoy = new Date();
     const fechaInicio = new Date(orden.fecha_inicio);
     const fechaFin = new Date(orden.fecha_fin);
@@ -187,6 +210,8 @@ const FacturacionView = () => {
             cantidad: parseFloat(getItemCantidad(item)),
             precio_unitario: parseFloat(getItemPrecio(item)),
             observacion: getItemObservacion(item),
+            impuesto_porcentaje: getItemIvaPorcentaje(item),
+            porcentaje_descuento: getItemDescuento(item),
           })),
           observacion: `Facturación ${periodo.label}`,
           fecha_periodo_inicio: fechaPeriodoInicio.toISOString().split('T')[0],
@@ -379,7 +404,12 @@ const FacturacionView = () => {
               {ordenes.map(orden => {
                     const itemsOrden = orden.items.filter(i => i.estado === '1' || i.estado === 1);
                     const itemsSeleccionados = itemsOrden.filter(i => selectedItems.includes(i.item_id));
-                    const totalSeleccionado = itemsSeleccionados.reduce((acc, item) => acc + getItemSubtotal(item), 0);
+                    const retPct = getRetPorcentaje(orden);
+                    const subtotalSel = itemsSeleccionados.reduce((acc, item) => acc + getItemBaseGravable(item), 0);
+                    const ivaSel = itemsSeleccionados.reduce((acc, item) => acc + getItemIvaValor(item), 0);
+                    // Igual que el backend: la retención se calcula una sola vez sobre la base de los ítems seleccionados
+                    const retencionSel = round2(subtotalSel * retPct / 100);
+                    const totalSeleccionado = subtotalSel + ivaSel - retencionSel;
                     const haySinPrecio = itemsSeleccionados.some(i => getItemSubtotal(i) <= 0.01);
                     const periodo = getPeriodoFacturable(orden);
                     const isExpanded = !!expandedOrdenes[orden.orden_servicio_id];
@@ -437,9 +467,10 @@ const FacturacionView = () => {
                                   <th>Servicio</th>
                                   <th className="text-center" style={{ width: '100px' }}>Cant.</th>
                                   <th className="text-end" style={{ width: '140px' }}>Precio Unit.</th>
+                                  <th className="text-center" style={{ width: '90px' }}>% Desc</th>
                                   <th className="text-end" style={{ width: '110px' }}>Subtotal</th>
                                   <th className="text-center" style={{ width: '80px' }}>% IVA</th>
-                                  <th className="text-end" style={{ width: '130px' }}>Total c/IVA</th>
+                                  <th className="text-end" style={{ width: '130px' }}>{retPct > 0 ? 'Total neto' : 'Total c/IVA'}</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -488,7 +519,19 @@ const FacturacionView = () => {
                                         style={{ width: '120px', display: 'inline-block', textAlign: 'right' }}
                                       />
                                     </td>
-                                    <td className="text-end fw-bold text-success">{formatCurrency(getItemSubtotal(item))}</td>
+                                    <td className="text-center">
+                                      <Form.Control
+                                        type="number"
+                                        size="sm"
+                                        step="0.01"
+                                        min="0"
+                                        max="100"
+                                        value={getItemDescuento(item)}
+                                        onChange={(e) => handleItemEdit(item.item_id, 'porcentaje_descuento', e.target.value)}
+                                        style={{ width: '70px', display: 'inline-block', textAlign: 'right' }}
+                                      />
+                                    </td>
+                                    <td className="text-end fw-bold text-success">{formatCurrency(getItemBaseGravable(item))}</td>
                                     <td className="text-center">
                                       <Form.Control
                                         type="number"
@@ -500,18 +543,40 @@ const FacturacionView = () => {
                                         onChange={(e) => handleItemEdit(item.item_id, 'impuesto_porcentaje', e.target.value)}
                                         style={{ width: '70px', display: 'inline-block', textAlign: 'right' }}
                                       />
+                                      {retPct > 0 && (
+                                        <div className="text-danger small mt-1">Ret {retPct.toLocaleString('es-CO')}%</div>
+                                      )}
                                     </td>
-                                    <td className="text-end fw-bold text-primary">{formatCurrency(getItemTotalConIva(item))}</td>
+                                    <td className="text-end fw-bold text-primary">
+                                      {retPct > 0 ? formatMoney2(getItemTotalNeto(item, retPct)) : formatCurrency(getItemTotalConIva(item))}
+                                    </td>
                                   </tr>
                                 ))}
                               </tbody>
                             </Table>
-                            <Card.Footer className="bg-light d-flex justify-content-end align-items-center gap-3 p-3">
+                            <Card.Footer className="bg-light d-flex justify-content-end align-items-end gap-4 p-3">
                               {itemsSeleccionados.length > 0 && (
                                 <>
-                                  <span className="fw-bold text-dark">
-                                    Total a facturar: {formatCurrency(totalSeleccionado)}
-                                  </span>
+                                  <div style={{ minWidth: '320px' }}>
+                                    <div className="d-flex justify-content-between">
+                                      <span>Subtotal</span>
+                                      <span>{formatMoney2(subtotalSel)}</span>
+                                    </div>
+                                    <div className="d-flex justify-content-between text-success">
+                                      <span>+ Impuestos</span>
+                                      <span>{formatMoney2(ivaSel)}</span>
+                                    </div>
+                                    {retPct > 0 && (
+                                      <div className="d-flex justify-content-between text-danger">
+                                        <span>− Retención en fuente ({retPct.toLocaleString('es-CO')}%)</span>
+                                        <span>− {formatMoney2(retencionSel)}</span>
+                                      </div>
+                                    )}
+                                    <div className="d-flex justify-content-between fw-bold text-dark border-top border-2 mt-1 pt-1">
+                                      <span>TOTAL A FACTURAR</span>
+                                      <span>{formatMoney2(totalSeleccionado)}</span>
+                                    </div>
+                                  </div>
                                   {haySinPrecio ? (
                                     <small className="text-warning">
                                       <i className="fas fa-exclamation-triangle me-1"></i>

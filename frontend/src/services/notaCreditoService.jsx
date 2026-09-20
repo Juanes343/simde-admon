@@ -90,9 +90,13 @@ const notaCreditoService = {
   },
 
   // Descargar ZIP (PDF + XML) de DataIco
-  descargarZip: async (notaId) => {
+  descargarZip: async (notaId, prefijo, empresaId) => {
     try {
       const response = await api.get(`/notas-credito/${notaId}/descargar-zip`, {
+        params: {
+          ...(prefijo && { prefijo }),
+          ...(empresaId && { empresa_id: empresaId }),
+        },
         responseType: 'blob', // Importante para recibir archivos binarios
       });
       return response.data;
@@ -103,9 +107,13 @@ const notaCreditoService = {
   },
 
   // Descargar PDF de DataIco
-  descargarPdf: async (notaId) => {
+  descargarPdf: async (notaId, prefijo, empresaId) => {
     try {
       const response = await api.get(`/notas-credito/${notaId}/descargar-pdf`, {
+        params: {
+          ...(prefijo && { prefijo }),
+          ...(empresaId && { empresa_id: empresaId }),
+        },
         responseType: 'blob',
       });
       return response.data;
@@ -116,9 +124,13 @@ const notaCreditoService = {
   },
 
   // Descargar XML de DataIco
-  descargarXml: async (notaId) => {
+  descargarXml: async (notaId, prefijo, empresaId) => {
     try {
       const response = await api.get(`/notas-credito/${notaId}/descargar-xml`, {
+        params: {
+          ...(prefijo && { prefijo }),
+          ...(empresaId && { empresa_id: empresaId }),
+        },
         responseType: 'blob',
       });
       return response.data;
@@ -138,6 +150,50 @@ const notaCreditoService = {
     } catch (error) {
       console.error('Error getting estadisticas:', error);
       throw error;
+    }
+  },
+
+  // ── Conceptos (CRUD) ──────────────────────────────────────────────────────
+
+  // Obtener todos los conceptos (incluye inactivos, para gestión)
+  getConceptosAll: async (empresaId) => {
+    try {
+      const response = await api.get('/notas-credito-conceptos/all', {
+        params: { empresa_id: empresaId },
+      });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Crear concepto
+  crearConcepto: async (payload) => {
+    try {
+      const response = await api.post('/notas-credito-conceptos', payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Actualizar concepto
+  actualizarConcepto: async (id, payload) => {
+    try {
+      const response = await api.put(`/notas-credito-conceptos/${id}`, payload);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
+    }
+  },
+
+  // Eliminar concepto
+  eliminarConcepto: async (id) => {
+    try {
+      const response = await api.delete(`/notas-credito-conceptos/${id}`);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || error;
     }
   },
 };

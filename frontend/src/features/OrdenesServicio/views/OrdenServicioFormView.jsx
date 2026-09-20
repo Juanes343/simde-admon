@@ -38,13 +38,25 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const [filteredServicios, setFilteredServicios] = useState([]);
   const [cantidad, setCantidad] = useState('1');
   const [observacionesItem, setObservacionesItem] = useState('');
+  const [porcentajeSoltecItem, setPorcentajeSoltecItem] = useState('0');
+  const [porcentajeDescuentoItem, setPorcentajeDescuentoItem] = useState('0');
   const [editingIndex, setEditingIndex] = useState(null);
   const [editData, setEditData] = useState({});
   
-  // Estados para el modal de confirmación
+  // Estados para el modal de confirmación de inactivar/activar
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [itemToToggle, setItemToToggle] = useState(null);
   const [indexToToggle, setIndexToToggle] = useState(null);
+
+  // Estados para el modal de confirmación de eliminar
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [indexToDelete, setIndexToDelete] = useState(null);
+
+  // Estados para el buscador de tercero
+  const [terceroSearchTerm, setTerceroSearchTerm] = useState('');
+  const [showTerceroDropdown, setShowTerceroDropdown] = useState(false);
+  const [filteredTerceros, setFilteredTerceros] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -65,9 +77,27 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   }, [searchTerm, servicios]);
 
   useEffect(() => {
+    if (terceroSearchTerm.trim() === '') {
+      setFilteredTerceros([]);
+      setShowTerceroDropdown(false);
+    } else {
+      const term = terceroSearchTerm.toLowerCase();
+      const filtered = terceros.filter(t =>
+        t.nombre_tercero.toLowerCase().includes(term) ||
+        String(t.tercero_id).toLowerCase().includes(term)
+      );
+      setFilteredTerceros(filtered);
+      setShowTerceroDropdown(filtered.length > 0);
+    }
+  }, [terceroSearchTerm, terceros]);
+
+  useEffect(() => {
     const handleClickOutside = (event) => {
       if (showDropdown && !event.target.closest('.servicio-search-container')) {
         setShowDropdown(false);
+      }
+      if (showTerceroDropdown && !event.target.closest('.tercero-search-container')) {
+        setShowTerceroDropdown(false);
       }
     };
 
@@ -75,7 +105,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDropdown]);
+  }, [showDropdown, showTerceroDropdown]);
 
   useEffect(() => {
     if (orden) {
@@ -88,6 +118,18 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         const day = String(date.getDate()).padStart(2, '0');
         return `${year}-${month}-${day}`;
       };
+
+      // Establecer label del tercero en modo edición
+      if (orden.tipo_id_tercero && orden.tercero_id) {
+        const terceroEncontrado = terceros.find(
+          t => t.tipo_id_tercero === orden.tipo_id_tercero && String(t.tercero_id) === String(orden.tercero_id)
+        );
+        if (terceroEncontrado) {
+          setTerceroSearchTerm(`${terceroEncontrado.nombre_tercero} - ${terceroEncontrado.tipo_id_tercero} ${terceroEncontrado.tercero_id}`);
+        } else if (orden.tercero) {
+          setTerceroSearchTerm(`${orden.tercero.nombre_tercero} - ${orden.tipo_id_tercero} ${orden.tercero_id}`);
+        }
+      }
 
       setFormData({
         tipo_id_tercero: orden.tipo_id_tercero || '',
@@ -121,14 +163,19 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
             observaciones: item.observaciones || '',
             estado: item.estado || '1',
             item_id: item.item_id,
+            facturado: item.facturado || false,
             impuesto_id: impuestoId,
             nombre_impuesto: impuesto?.nombre || '',
             porcentaje_impuesto: parseFloat(impuesto?.porcentaje || 0),
+            porcentaje_soltec: (parseFloat(item.porcentaje_soltec) > 0)
+              ? String(item.porcentaje_soltec)
+              : (servicio?.porcentaje_soltec != null ? String(servicio.porcentaje_soltec) : '0'),
+            porcentaje_descuento: parseFloat(item.porcentaje_descuento) || 0,
           };
         }));
       }
     }
-  }, [orden, servicios, impuestos]);
+  }, [orden, servicios, impuestos, terceros]);
 
   const loadData = async () => {
     try {
@@ -172,22 +219,21 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     });
   };
 
-  const handleTerceroChange = (e) => {
-    const value = e.target.value;
-    if (value) {
-      const [tipo, id] = value.split('|');
-      setFormData({
-        ...formData,
-        tipo_id_tercero: tipo,
-        tercero_id: id,
-      });
-    } else {
-      setFormData({
-        ...formData,
-        tipo_id_tercero: '',
-        tercero_id: '',
-      });
+  const handleTerceroSearchChange = (e) => {
+    setTerceroSearchTerm(e.target.value);
+    if (!e.target.value) {
+      setFormData(prev => ({ ...prev, tipo_id_tercero: '', tercero_id: '' }));
     }
+  };
+
+  const handleSelectTercero = (tercero) => {
+    setTerceroSearchTerm(`${tercero.nombre_tercero} - ${tercero.tipo_id_tercero} ${tercero.tercero_id}`);
+    setFormData(prev => ({
+      ...prev,
+      tipo_id_tercero: tercero.tipo_id_tercero,
+      tercero_id: tercero.tercero_id,
+    }));
+    setShowTerceroDropdown(false);
   };
 
   const handleSearchChange = (e) => {
@@ -198,6 +244,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     setSelectedServicio(servicio.servicio_id);
     setSearchTerm(servicio.nombre_servicio);
     setShowDropdown(false);
+    setPorcentajeSoltecItem(servicio.porcentaje_soltec != null ? String(servicio.porcentaje_soltec) : '0');
   };
 
   const handleAgregarServicio = () => {
@@ -238,6 +285,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         impuesto_id: servicio.impuesto_id || null,
         nombre_impuesto: impuesto?.nombre || '',
         porcentaje_impuesto: parseFloat(impuesto?.porcentaje || 0),
+        porcentaje_soltec: porcentajeSoltecItem || '0',
+        porcentaje_descuento: parseFloat(porcentajeDescuentoItem) || 0,
       }
     ]);
 
@@ -245,6 +294,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     setSearchTerm('');
     setCantidad('1');
     setObservacionesItem('');
+    setPorcentajeSoltecItem('0');
+    setPorcentajeDescuentoItem('0');
   };
 
   const handleCambiarEstadoItem = (index, item) => {
@@ -256,16 +307,6 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const handleConfirmToggle = async () => {
     const item = itemToToggle;
     const index = indexToToggle;
-    
-    // Si el item no tiene item_id, es nuevo y se puede eliminar directamente
-    if (!item.item_id) {
-      setItems(items.filter((_, i) => i !== index));
-      setShowConfirmModal(false);
-      setItemToToggle(null);
-      setIndexToToggle(null);
-      toast.success('Servicio eliminado correctamente');
-      return;
-    }
 
     const nuevoEstado = item.estado === '1' ? '0' : '1';
     const accion = nuevoEstado === '0' ? 'inactivar' : 'activar';
@@ -289,12 +330,47 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
     }
   };
 
+  const handleEliminarItem = (index, item) => {
+    setItemToDelete(item);
+    setIndexToDelete(index);
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    const item = itemToDelete;
+    const index = indexToDelete;
+
+    if (!item.item_id) {
+      setItems(items.filter((_, i) => i !== index));
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+      setIndexToDelete(null);
+      toast.success('Servicio eliminado correctamente');
+      return;
+    }
+
+    try {
+      await ordenServicioItemService.deleteItem(item.item_id);
+      setItems(items.filter((_, i) => i !== index));
+      toast.success('Servicio eliminado correctamente');
+    } catch (error) {
+      const mensaje = error.response?.data?.message || 'No se pudo eliminar el servicio';
+      toast.error(mensaje);
+    } finally {
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+      setIndexToDelete(null);
+    }
+  };
+
   const handleEditClick = (index, item) => {
     setEditingIndex(index);
     setEditData({
       cantidad: item.cantidad,
       precio_unitario: item.precio_unitario,
-      observaciones: item.observaciones || ''
+      observaciones: item.observaciones || '',
+      porcentaje_soltec: item.porcentaje_soltec || '0',
+      porcentaje_descuento: item.porcentaje_descuento || 0
     });
   };
 
@@ -326,7 +402,9 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
       cantidad: parseFloat(editData.cantidad),
       precio_unitario: parseFloat(editData.precio_unitario),
       subtotal: parseFloat(editData.cantidad) * parseFloat(editData.precio_unitario),
-      observaciones: editData.observaciones || ''
+      observaciones: editData.observaciones || '',
+      porcentaje_soltec: editData.porcentaje_soltec !== undefined ? editData.porcentaje_soltec : (updatedItems[index].porcentaje_soltec || '0'),
+      porcentaje_descuento: editData.porcentaje_descuento !== undefined ? parseFloat(editData.porcentaje_descuento) || 0 : (updatedItems[index].porcentaje_descuento || 0)
     };
     
     setItems(updatedItems);
@@ -336,6 +414,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
 
   const calcularTotal = () => {
     return items.reduce((total, item) => {
+      if (item.estado === '0') return total;
       const subtotal = parseFloat(item.subtotal) || (parseFloat(item.cantidad) * parseFloat(item.precio_unitario)) || 0;
       return total + subtotal;
     }, 0);
@@ -352,6 +431,11 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     
+    if (!formData.tipo_id_tercero || !formData.tercero_id) {
+      toast.warning('Seleccione un tercero de la lista');
+      return;
+    }
+
     if (items.length === 0) {
       toast.warning('Debe agregar al menos un servicio');
       return;
@@ -366,15 +450,15 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         precio_unitario: item.precio_unitario,
         observaciones: item.observaciones || '',
         impuesto_id: item.impuesto_id || null,
+        porcentaje_soltec: item.porcentaje_soltec || 0,
+        porcentaje_descuento: parseFloat(item.porcentaje_descuento) || 0,
       })),
     };
     
     onSubmit(data);
   };
 
-  const terceroValue = formData.tipo_id_tercero && formData.tercero_id 
-    ? `${formData.tipo_id_tercero}|${formData.tercero_id}` 
-    : '';
+
 
   return (
     <Card>
@@ -387,24 +471,77 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           {/* Tercero */}
           <Row>
             <Col md={12}>
-              <Form.Group className="mb-3">
+              <Form.Group className="tercero-search-container mb-3" style={{ position: 'relative' }}>
                 <Form.Label>Tercero *</Form.Label>
-                <Form.Select
-                  value={terceroValue}
-                  onChange={handleTerceroChange}
-                  required
-                  disabled={isEditMode || loadingData}
-                >
-                  <option value="">Seleccione un tercero...</option>
-                  {terceros.map((tercero) => (
-                    <option 
-                      key={`${tercero.tipo_id_tercero}|${tercero.tercero_id}`}
-                      value={`${tercero.tipo_id_tercero}|${tercero.tercero_id}`}
+                <InputGroup>
+                  <InputGroup.Text>
+                    <i className="fas fa-search"></i>
+                  </InputGroup.Text>
+                  <Form.Control
+                    type="text"
+                    placeholder="Buscar tercero por nombre o NIT..."
+                    value={terceroSearchTerm}
+                    onChange={handleTerceroSearchChange}
+                    onFocus={() => {
+                      if (terceroSearchTerm.trim() !== '' && filteredTerceros.length > 0) {
+                        setShowTerceroDropdown(true);
+                      }
+                    }}
+                    disabled={isEditMode || loadingData}
+                    autoComplete="off"
+                  />
+                  {terceroSearchTerm && !isEditMode && (
+                    <InputGroup.Text
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        setTerceroSearchTerm('');
+                        setFormData(prev => ({ ...prev, tipo_id_tercero: '', tercero_id: '' }));
+                      }}
+                      title="Limpiar búsqueda"
                     >
-                      {tercero.nombre_tercero} - {tercero.tipo_id_tercero} {tercero.tercero_id}
-                    </option>
-                  ))}
-                </Form.Select>
+                      <i className="fas fa-times"></i>
+                    </InputGroup.Text>
+                  )}
+                </InputGroup>
+                {showTerceroDropdown && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      backgroundColor: 'white',
+                      border: '1px solid #ced4da',
+                      borderRadius: '0.25rem',
+                      zIndex: 1000,
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                      marginTop: '2px'
+                    }}
+                  >
+                    {filteredTerceros.map((t) => (
+                      <div
+                        key={`${t.tipo_id_tercero}|${t.tercero_id}`}
+                        onClick={() => handleSelectTercero(t)}
+                        style={{
+                          padding: '10px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #f0f0f0'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f8f9fa';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'white';
+                        }}
+                      >
+                        <div style={{ fontWeight: '500' }}>{t.nombre_tercero}</div>
+                        <small className="text-muted">{t.tipo_id_tercero} {t.tercero_id}</small>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </Form.Group>
             </Col>
           </Row>
@@ -446,20 +583,6 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                   onChange={handleChange}
                   required
                   min="1"
-                />
-              </Form.Group>
-            </Col>
-            <Col md={3}>
-              <Form.Group className="mb-3">
-                <Form.Label>Porcentaje Soltec (%)</Form.Label>
-                <Form.Control
-                  type="number"
-                  step="0.01"
-                  name="porcentaje_soltec"
-                  value={formData.porcentaje_soltec}
-                  onChange={handleChange}
-                  min="0"
-                  max="100"
                 />
               </Form.Group>
             </Col>
@@ -513,7 +636,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           <hr />
           <h6 className="mb-3">Servicios</h6>
           <Row className="mb-3">
-            <Col md={5}>
+            <Col md={4}>
               <Form.Group className="servicio-search-container" style={{ position: 'relative' }}>
                 <Form.Label>Servicio</Form.Label>
                 <InputGroup>
@@ -612,7 +735,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                 />
               </Form.Group>
             </Col>
-            <Col md={3}>
+            <Col md={2}>
               <Form.Group>
                 <Form.Label>Observaciones</Form.Label>
                 <Form.Control
@@ -620,6 +743,32 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                   placeholder="Opcional..."
                   value={observacionesItem}
                   onChange={(e) => setObservacionesItem(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={2}>
+              <Form.Group>
+                <Form.Label>% Soltec</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={porcentajeSoltecItem}
+                  onChange={(e) => setPorcentajeSoltecItem(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={2}>
+              <Form.Group>
+                <Form.Label>% Desc</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  value={porcentajeDescuentoItem}
+                  onChange={(e) => setPorcentajeDescuentoItem(e.target.value)}
                 />
               </Form.Group>
             </Col>
@@ -645,7 +794,8 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                     <th style={{ width: '120px' }} className="text-end">Precio Unit.</th>
                     <th style={{ width: '140px' }} className="text-center">Impuesto</th>
                     <th style={{ width: '120px' }} className="text-end">Subtotal</th>
-                    <th style={{ width: '180px' }}>Observaciones</th>
+                    <th style={{ width: '90px' }} className="text-center">% Desc</th>
+                    <th style={{ width: '90px' }} className="text-center">% Soltec</th>
                     <th style={{ width: '100px' }} className="text-center">Acción</th>
                   </tr>
                 </thead>
@@ -663,6 +813,19 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                         {item.nombre_servicio}
                         <br />
                         <small className="text-muted">{item.tipo_unidad}</small>
+                        <br />
+                        {editingIndex === index ? (
+                          <Form.Control
+                            type="text"
+                            value={editData.observaciones || ''}
+                            onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                            size="sm"
+                            placeholder="Observaciones..."
+                            className="mt-1"
+                          />
+                        ) : (
+                          item.observaciones ? <small className="text-muted">{item.observaciones}</small> : null
+                        )}
                       </td>
                       <td className="text-center">
                         {editingIndex === index ? (
@@ -718,18 +881,26 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                           }
                         </strong>
                       </td>
-                      <td>
+                      <td className="text-center">
                         {editingIndex === index ? (
                           <Form.Control
-                            type="text"
-                            value={editData.observaciones || ''}
-                            onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={editData.porcentaje_descuento ?? 0}
+                            onChange={(e) => handleInputChange('porcentaje_descuento', e.target.value)}
                             size="sm"
-                            placeholder="Observaciones..."
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') handleSaveEdit(index);
+                            }}
                           />
                         ) : (
-                          <small className="text-muted">{item.observaciones || '-'}</small>
+                          <span>{parseFloat(item.porcentaje_descuento) || 0}%</span>
                         )}
+                      </td>
+                      <td className="text-center">
+                        <span>{item.porcentaje_soltec || '0'}%</span>
                       </td>
                       <td className="text-center">
                         {editingIndex === index ? (
@@ -761,18 +932,30 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                             >
                               <i className="fas fa-edit"></i>
                             </Button>
-                            <Button
-                              size="sm"
-                              variant={item.estado === '1' ? 'outline-warning' : 'outline-success'}
-                              onClick={() => handleCambiarEstadoItem(index, item)}
-                              title={item.estado === '1' ? 'Inactivar servicio' : 'Activar servicio'}
-                            >
-                              {item.estado === '1' ? (
-                                <BiToggleRight size={18} />
-                              ) : (
-                                <BiToggleLeft size={18} />
-                              )}
-                            </Button>
+                            {!item.facturado && (
+                              <Button
+                                size="sm"
+                                variant="outline-danger"
+                                onClick={() => handleEliminarItem(index, item)}
+                                title="Eliminar servicio"
+                              >
+                                <i className="fas fa-trash"></i>
+                              </Button>
+                            )}
+                            {item.item_id && (
+                              <Button
+                                size="sm"
+                                variant={item.estado === '1' ? 'outline-warning' : 'outline-success'}
+                                onClick={() => handleCambiarEstadoItem(index, item)}
+                                title={item.estado === '1' ? 'Inactivar servicio' : 'Activar servicio'}
+                              >
+                                {item.estado === '1' ? (
+                                  <BiToggleRight size={18} />
+                                ) : (
+                                  <BiToggleLeft size={18} />
+                                )}
+                              </Button>
+                            )}
                           </div>
                         )}
                       </td>
@@ -785,7 +968,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
                     <td className="text-end">
                       <strong className="fs-5">{formatCurrency(calcularTotal())}</strong>
                     </td>
-                    <td colSpan="3"></td>
+                    <td colSpan="2"></td>
                   </tr>
                 </tbody>
               </Table>
@@ -831,7 +1014,7 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
         </Form>
       </Card.Body>
 
-      {/* Modal de confirmación para cambiar estado */}
+      {/* Modal de confirmación para inactivar/activar */}
       <ConfirmModal
         show={showConfirmModal}
         onHide={() => {
@@ -840,41 +1023,31 @@ const OrdenServicioFormView = ({ orden, onSubmit, onCancel, loading }) => {
           setIndexToToggle(null);
         }}
         onConfirm={handleConfirmToggle}
-        title={
-          !itemToToggle?.item_id
-            ? 'Eliminar Servicio'
-            : itemToToggle?.estado === '1'
-            ? 'Inactivar Servicio'
-            : 'Activar Servicio'
-        }
+        title={itemToToggle?.estado === '1' ? 'Inactivar Servicio' : 'Activar Servicio'}
         message={
-          !itemToToggle?.item_id
-            ? `¿Está seguro de eliminar el servicio "${itemToToggle?.nombre_servicio}"?`
-            : itemToToggle?.estado === '1'
+          itemToToggle?.estado === '1'
             ? `¿Está seguro de inactivar el servicio "${itemToToggle?.nombre_servicio}"?`
             : `¿Está seguro de activar el servicio "${itemToToggle?.nombre_servicio}"?`
         }
-        confirmText={
-          !itemToToggle?.item_id
-            ? 'Eliminar'
-            : itemToToggle?.estado === '1'
-            ? 'Inactivar'
-            : 'Activar'
-        }
-        confirmVariant={
-          !itemToToggle?.item_id
-            ? 'danger'
-            : itemToToggle?.estado === '1'
-            ? 'warning'
-            : 'success'
-        }
-        icon={
-          !itemToToggle?.item_id
-            ? 'fa-trash'
-            : itemToToggle?.estado === '1'
-            ? 'fa-toggle-off'
-            : 'fa-toggle-on'
-        }
+        confirmText={itemToToggle?.estado === '1' ? 'Inactivar' : 'Activar'}
+        confirmVariant={itemToToggle?.estado === '1' ? 'warning' : 'success'}
+        icon={itemToToggle?.estado === '1' ? 'fa-toggle-off' : 'fa-toggle-on'}
+      />
+
+      {/* Modal de confirmación para eliminar item */}
+      <ConfirmModal
+        show={showDeleteModal}
+        onHide={() => {
+          setShowDeleteModal(false);
+          setItemToDelete(null);
+          setIndexToDelete(null);
+        }}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Servicio"
+        message={`¿Está seguro de eliminar el servicio "${itemToDelete?.nombre_servicio}"? Esta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        confirmVariant="danger"
+        icon="fa-trash"
       />
     </Card>
   );

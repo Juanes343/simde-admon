@@ -17,7 +17,13 @@ const LoginPage = () => {
     try {
       const response = await authService.login(formData);
       localStorage.setItem('token', response.access_token);
-      localStorage.setItem('user', JSON.stringify(response.user));
+      // Obtener usuario completo con módulos asignados
+      try {
+        const meResponse = await authService.me();
+        localStorage.setItem('user', JSON.stringify(meResponse));
+      } catch {
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
       toast.success('Inicio de sesión exitoso');
       navigate('/dashboard');
     } catch (err) {
@@ -39,11 +45,11 @@ const LoginPage = () => {
 
         <LoginView onSubmit={handleSubmit} loading={loading} error={error} />
 
-        <div className="text-center mt-3">
+        {/* <div className="text-center mt-3">
           <Link to="/register" className="text-decoration-none">
             ¿No tienes cuenta? Regístrate
           </Link>
-        </div>
+        </div> */}
       </div>
     </div>
   );

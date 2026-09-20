@@ -31,10 +31,11 @@ const NotasCreditoListView = () => {
     try {
       const data = await notaCreditoService.getNotas({ page, ...filters });
       setNotas(data.data || []);
+      const pag = data.pagination || data;
       setPagination({
-        current_page: data.current_page,
-        last_page: data.last_page,
-        total: data.total
+        current_page: pag.current_page,
+        last_page: pag.last_page,
+        total: pag.total
       });
     } catch (error) {
       console.error("Error al cargar notas:", error);
@@ -144,7 +145,7 @@ const NotasCreditoListView = () => {
       allowEscapeKey: false,
       didOpen: async () => {
         try {
-          const response = await notaCreditoService.descargarPdf(nota.id);
+          const response = await notaCreditoService.descargarPdf(nota.nota_credito_id, nota.prefijo, nota.empresa_id);
           const blob = new Blob([response], { type: 'application/pdf' });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -176,7 +177,7 @@ const NotasCreditoListView = () => {
       allowEscapeKey: false,
       didOpen: async () => {
         try {
-          const response = await notaCreditoService.descargarXml(nota.id);
+          const response = await notaCreditoService.descargarXml(nota.nota_credito_id, nota.prefijo, nota.empresa_id);
           const blob = new Blob([response], { type: 'application/xml' });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -208,7 +209,7 @@ const NotasCreditoListView = () => {
       allowEscapeKey: false,
       didOpen: async () => {
         try {
-          const response = await notaCreditoService.descargarZip(nota.id);
+          const response = await notaCreditoService.descargarZip(nota.nota_credito_id, nota.prefijo, nota.empresa_id);
           const blob = new Blob([response], { type: 'application/zip' });
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
@@ -458,22 +459,43 @@ const NotasCreditoListView = () => {
           )}
 
           {pagination.last_page > 1 && (
-            <div className="d-flex justify-content-center mt-4">
+            <div className="d-flex flex-column align-items-center mt-4">
               <Pagination>
                 <Pagination.First onClick={() => loadNotas(1)} disabled={pagination.current_page === 1} />
                 <Pagination.Prev onClick={() => loadNotas(pagination.current_page - 1)} disabled={pagination.current_page === 1} />
-                {[...Array(pagination.last_page).keys()].map((num) => (
-                  <Pagination.Item
-                    key={num + 1}
-                    active={num + 1 === pagination.current_page}
-                    onClick={() => loadNotas(num + 1)}
-                  >
-                    {num + 1}
-                  </Pagination.Item>
-                ))}
+                {(() => {
+                  const pages = [];
+                  const current = pagination.current_page;
+                  const last = pagination.last_page;
+                  const start = Math.max(1, current - 2);
+                  const end = Math.min(last, current + 2);
+                  if (start > 1) {
+                    pages.push(<Pagination.Item key={1} onClick={() => loadNotas(1)}>1</Pagination.Item>);
+                    if (start > 2) pages.push(<Pagination.Ellipsis key="start-ellipsis" disabled />);
+                  }
+                  for (let num = start; num <= end; num++) {
+                    pages.push(
+                      <Pagination.Item
+                        key={num}
+                        active={num === current}
+                        onClick={() => loadNotas(num)}
+                      >
+                        {num}
+                      </Pagination.Item>
+                    );
+                  }
+                  if (end < last) {
+                    if (end < last - 1) pages.push(<Pagination.Ellipsis key="end-ellipsis" disabled />);
+                    pages.push(<Pagination.Item key={last} onClick={() => loadNotas(last)}>{last}</Pagination.Item>);
+                  }
+                  return pages;
+                })()}
                 <Pagination.Next onClick={() => loadNotas(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} />
                 <Pagination.Last onClick={() => loadNotas(pagination.last_page)} disabled={pagination.current_page === pagination.last_page} />
               </Pagination>
+              <small className="text-muted">
+                Página {pagination.current_page} de {pagination.last_page} · {pagination.total} registros
+              </small>
             </div>
           )}
         </Card.Body>

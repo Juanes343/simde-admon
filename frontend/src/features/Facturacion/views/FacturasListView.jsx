@@ -10,7 +10,7 @@ const FacturasListView = () => {
   const [facturas, setFacturas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({});
-  const [auditCache, setAuditCache] = useState({}); // Cache de auditorías
+  const [perPage, setPerPage] = useState(20);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [auditDetail, setAuditDetail] = useState(null);
   const [filters, setFilters] = useState({
@@ -20,35 +20,21 @@ const FacturasListView = () => {
   });
 
   useEffect(() => {
-    loadFacturas();
-  }, [filters]);
+    loadFacturas(1);
+  }, [filters, perPage]);
 
   const loadFacturas = async (page = 1) => {
     setLoading(true);
     try {
-      const data = await facturacionService.getFacturas(page, filters);
+      const data = await facturacionService.getFacturas(page, { ...filters, per_page: perPage });
       setFacturas(data.data);
       setPagination({
         current_page: data.current_page,
         last_page: data.last_page,
-        total: data.total
+        total: data.total,
+        from: data.from,
+        to: data.to,
       });
-
-      // Cargar auditorías para cada factura que tenga CUFE
-      const newAuditCache = { ...auditCache };
-      for (const factura of data.data) {
-        if (factura.cufe && !newAuditCache[factura.cufe]) {
-          try {
-            const auditResponse = await facturacionService.getAuditByCufe(factura.cufe);
-            if (auditResponse.success) {
-              newAuditCache[factura.cufe] = auditResponse.data;
-            }
-          } catch (error) {
-            console.warn(`No se pudo cargar auditoría para CUFE ${factura.cufe}`);
-          }
-        }
-      }
-      setAuditCache(newAuditCache);
     } catch (error) {
       console.error("Error cargando facturas", error);
     } finally {
@@ -56,9 +42,9 @@ const FacturasListView = () => {
     }
   };
 
+  // Devuelve la auditoría embebida directamente desde la factura
   const getAuditInfo = (factura) => {
-    if (!factura.cufe) return null;
-    return auditCache[factura.cufe];
+    return factura.ultima_auditoria_rel || null;
   };
 
   const handleEnviarDataIco = async (factura) => {
@@ -137,19 +123,11 @@ const FacturasListView = () => {
 
   const handleViewAudit = async (factura) => {
     const audit = getAuditInfo(factura);
-    if (!audit && factura.cufe) {
-      try {
-        const response = await facturacionService.getAuditByCufe(factura.cufe);
-        if (response.success) {
-          setAuditDetail(response.data);
-          setShowAuditModal(true);
-        }
-      } catch (error) {
-        Swal.fire('Error', 'No se pudo cargar los detalles de auditoría', 'error');
-      }
-    } else {
+    if (audit) {
       setAuditDetail(audit);
       setShowAuditModal(true);
+    } else {
+      Swal.fire('Información', 'No hay datos de auditoría disponibles para esta factura', 'info');
     }
   };
 
@@ -345,9 +323,12 @@ const FacturasListView = () => {
                       </td>
                       <td className="text-end fw-bold">{formatCurrency(f.total_factura)}</td>
                       <td className="text-center">
-                        <Badge bg={f.estado === '1' ? 'success' : 'danger'}>
-                          {f.estado === '1' ? 'Generada' : 'Anulada'}
-                        </Badge>
+                        {f.estado === '1' && <Badge bg="success">Generada</Badge>}
+                        {f.estado === '2' && <Badge bg="primary">Pagada</Badge>}
+                        {f.estado === '3' && <Badge bg="danger">Anulada</Badge>}
+                        {f.estado !== '1' && f.estado !== '2' && f.estado !== '3' && (
+                          <Badge bg="secondary">{f.estado}</Badge>
+                        )}
                       </td>
                       <td className="text-center">
                         {getEstadoBadge(f)}
@@ -439,22 +420,65 @@ const FacturasListView = () => {
           )}
 
           {pagination.last_page > 1 && (
-            <div className="d-flex justify-content-center mt-4">
-              <Pagination>
+            <div className="d-flex flex-wrap justify-content-between align-items-center mt-4 gap-2">
+              {/* Info de registros */}
+              <small className="text-muted">
+                Mostrando {pagination.from ?? 1}–{pagination.to ?? facturas.length} de {pagination.total ?? 0} facturas
+              </small>
+
+              {/* Paginador */}
+              <Pagination className="mb-0">
                 <Pagination.First onClick={() => loadFacturas(1)} disabled={pagination.current_page === 1} />
                 <Pagination.Prev onClick={() => loadFacturas(pagination.current_page - 1)} disabled={pagination.current_page === 1} />
-                {[...Array(pagination.last_page).keys()].map(num => (
-                  <Pagination.Item 
-                    key={num + 1} 
-                    active={num + 1 === pagination.current_page}
-                    onClick={() => loadFacturas(num + 1)}
-                  >
-                    {num + 1}
-                  </Pagination.Item>
-                ))}
+
+                {(() => {
+                  const total = pagination.last_page;
+                  const current = pagination.current_page;
+                  const delta = 2;
+                  const pages = [];
+                  const left = Math.max(2, current - delta);
+                  const right = Math.min(total - 1, current + delta);
+
+                  pages.push(1);
+                  if (left > 2) pages.push('...');
+                  for (let i = left; i <= right; i++) pages.push(i);
+                  if (right < total - 1) pages.push('...');
+                  if (total > 1) pages.push(total);
+
+                  return pages.map((page, idx) =>
+                    page === '...' ? (
+                      <Pagination.Ellipsis key={`e-${idx}`} disabled />
+                    ) : (
+                      <Pagination.Item
+                        key={page}
+                        active={page === current}
+                        onClick={() => page !== current && loadFacturas(page)}
+                      >
+                        {page}
+                      </Pagination.Item>
+                    )
+                  );
+                })()}
+
                 <Pagination.Next onClick={() => loadFacturas(pagination.current_page + 1)} disabled={pagination.current_page === pagination.last_page} />
                 <Pagination.Last onClick={() => loadFacturas(pagination.last_page)} disabled={pagination.current_page === pagination.last_page} />
               </Pagination>
+
+              {/* Selector registros por página */}
+              <div className="d-flex align-items-center gap-2">
+                <small className="text-muted text-nowrap">Registros por página:</small>
+                <Form.Select
+                  size="sm"
+                  style={{ width: '80px' }}
+                  value={perPage}
+                  onChange={(e) => setPerPage(Number(e.target.value))}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </Form.Select>
+              </div>
             </div>
           )}
         </Card.Body>

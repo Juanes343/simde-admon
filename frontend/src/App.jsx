@@ -31,10 +31,25 @@ import OrdenServicioSignaturePage from './features/OrdenesServicio/pages/OrdenSe
 // Facturacion
 import FacturacionView from './features/Facturacion/views/FacturacionView';
 import FacturasListView from './features/Facturacion/views/FacturasListView';
+import FacturasExternasView from './features/Facturacion/views/FacturasExternasView';
 
 // Notas Crédito/Débito
 import NotasCreditoView from './features/NotasCredito/views/NotasCreditoView';
 import NotasCreditoListView from './features/NotasCredito/views/NotasCreditoListView';
+import NotasCreditoConceptosView from './features/NotasCredito/views/NotasCreditoConceptosView';
+
+// Causacion
+import CausacionPage from './features/Causacion/pages/CausacionPage';
+import CausacionHistorialPage from './features/Causacion/pages/CausacionHistorialPage';
+import ReporteCausacionPage from './features/Causacion/pages/ReporteCausacionPage';
+
+// Cotizaciones
+import CotizacionesListPage from './features/Cotizaciones/pages/CotizacionesListPage';
+import CotizacionFormPage from './features/Cotizaciones/pages/CotizacionFormPage';
+import CotizacionDetailPage from './features/Cotizaciones/pages/CotizacionDetailPage';
+
+// Usuarios
+import UsuarioPermisosView from './features/Usuarios/views/UsuarioPermisosView';
 
 // Components
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
@@ -181,6 +196,15 @@ function App() {
           />
 
           <Route
+            path="/facturas-externas"
+            element={
+              <PrivateRoute>
+                <FacturasExternasView />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
             path="/notas"
             element={
               <PrivateRoute>
@@ -199,10 +223,89 @@ function App() {
           />
 
           <Route
+            path="/notas-conceptos"
+            element={
+              <PrivateRoute>
+                <NotasCreditoConceptosView />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
             path="/ordenes-servicio/:id"
             element={
               <PrivateRoute>
                 <OrdenServicioDetailPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/usuarios/permisos"
+            element={
+              <PrivateRoute>
+                <UsuarioPermisosView />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/causacion"
+            element={
+              <PrivateRoute>
+                <CausacionPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/causacion/historial"
+            element={
+              <PrivateRoute>
+                <CausacionHistorialPage />
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/causacion/reporte"
+            element={
+              <PrivateRoute>
+                <ReporteCausacionPage />
+              </PrivateRoute>
+            }
+          />
+
+          {/* Rutas de Cotizaciones */}
+          <Route
+            path="/cotizaciones"
+            element={
+              <PrivateRoute>
+                <CotizacionesListPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/cotizaciones/new"
+            element={
+              <PrivateRoute>
+                <CotizacionFormPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/cotizaciones/edit/:id"
+            element={
+              <PrivateRoute>
+                <CotizacionFormPage />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/cotizaciones/:id"
+            element={
+              <PrivateRoute>
+                <CotizacionDetailPage />
               </PrivateRoute>
             }
           />

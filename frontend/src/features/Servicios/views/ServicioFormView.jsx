@@ -18,6 +18,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
     tipo_unidad: 'UNIDAD',
     precio_unitario: '',
     impuesto_id: '',
+    porcentaje_soltec: '',
     sw_estado: '1',
   });
 
@@ -30,6 +31,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
         tipo_unidad: servicio.tipo_unidad || 'UNIDAD',
         precio_unitario: servicio.precio_unitario || '',
         impuesto_id: servicio.impuesto_id || '',
+        porcentaje_soltec: servicio.porcentaje_soltec || '',
         sw_estado: servicio.sw_estado || '1',
       });
     }
@@ -81,7 +83,13 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    const data = {
+      ...formData,
+      cantidad: formData.cantidad === '' ? null : formData.cantidad,
+      impuesto_id: formData.impuesto_id === '' ? null : formData.impuesto_id,
+      porcentaje_soltec: formData.porcentaje_soltec === '' ? null : formData.porcentaje_soltec,
+    };
+    onSubmit(data);
   };
 
   return (
@@ -182,7 +190,7 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
           </Row>
 
           <Row>
-            <Col md={6}>
+            <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>Impuesto (IVA)</Form.Label>
                 <Form.Select
@@ -204,7 +212,26 @@ const ServicioFormView = ({ servicio, onSubmit, onCancel, loading }) => {
               </Form.Group>
             </Col>
 
-            <Col md={6}>
+            <Col md={4}>
+              <Form.Group className="mb-3">
+                <Form.Label>Porcentaje Soltec (%)</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  name="porcentaje_soltec"
+                  value={formData.porcentaje_soltec}
+                  onChange={handleChange}
+                  placeholder="Ej: 10"
+                />
+                <Form.Text className="text-muted">
+                  Porcentaje Soltec por defecto
+                </Form.Text>
+              </Form.Group>
+            </Col>
+
+            <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Check
                   type="checkbox"

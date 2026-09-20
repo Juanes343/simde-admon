@@ -11,6 +11,15 @@ const ordenServicioItemService = {
       estado
     });
     return response.data;
+  },
+
+  /**
+   * Eliminar un item de orden de servicio (solo si no está facturado)
+   * @param {number} itemId - ID del item
+   */
+  deleteItem: async (itemId) => {
+    const response = await api.delete(`/orden-servicio-items/${itemId}`);
+    return response.data;
   }
 };
 

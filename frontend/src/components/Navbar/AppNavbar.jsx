@@ -4,9 +4,22 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { authService } from '../../features/Auth/services/authService';
 
+const NAV_LINKS = [
+  { modulo: 'terceros',    label: 'Terceros',           path: '/terceros' },
+  { modulo: 'servicios',   label: 'Servicios',          path: '/servicios' },
+  { modulo: 'ordenes',     label: 'Órdenes de Servicio', path: '/ordenes-servicio' },
+  { modulo: 'facturacion', label: 'Facturación',        path: '/facturacion' },
+  { modulo: 'notas',       label: 'Notas',              path: '/notas-historico' },
+  { modulo: 'causacion',   label: 'Causación',          path: '/causacion' },
+  { modulo: 'usuarios',    label: 'Usuarios',           path: '/usuarios/permisos' },
+];
+
 const AppNavbar = () => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const modulos = user?.modulos || [];
+  const esAdmin = user?.sw_admin === '1' || user?.sw_admin === 1;
+  const linksVisibles = NAV_LINKS.filter((l) => esAdmin || modulos.includes(l.modulo));
 
   const handleLogout = async () => {
     try {
@@ -33,10 +46,11 @@ const AppNavbar = () => {
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="me-auto">
             <Nav.Link onClick={() => navigate('/dashboard')}>Dashboard</Nav.Link>
-            <Nav.Link onClick={() => navigate('/terceros')}>Terceros</Nav.Link>
-            <Nav.Link onClick={() => navigate('/servicios')}>Servicios</Nav.Link>
-            <Nav.Link onClick={() => navigate('/ordenes-servicio')}>Órdenes de Servicio</Nav.Link>
-            <Nav.Link onClick={() => navigate('/facturacion')}>Facturación</Nav.Link>
+            {linksVisibles.map((l) => (
+              <Nav.Link key={l.modulo} onClick={() => navigate(l.path)}>
+                {l.label}
+              </Nav.Link>
+            ))}
           </Nav>
           <Nav>
             <Navbar.Text className="me-3">

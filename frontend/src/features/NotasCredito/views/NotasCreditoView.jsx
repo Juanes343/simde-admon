@@ -27,6 +27,7 @@ import {
 import Swal from 'sweetalert2';
 import notaCreditoService from '../../../services/notaCreditoService';
 import facturacionService from '../../../services/facturacionService';
+import facturaExternaService from '../../../services/facturaExternaService';
 import { formatCurrency } from '../../../utils/formatters';
 
 const NotasCreditoView = () => {
@@ -50,11 +51,12 @@ const NotasCreditoView = () => {
   const [facturaFilters, setFacturaFilters] = useState({
     fechaDesde: '',
     fechaHasta: '',
-    tercero: '',
+    numero: '',
   });
   const [selectedFactura, setSelectedFactura] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [itemAmounts, setItemAmounts] = useState({});
+  const [valorExterno, setValorExterno] = useState(0);
 
   // Cargar catálogos al montar
   useEffect(() => {
@@ -71,6 +73,11 @@ const NotasCreditoView = () => {
   // Auto-seleccionar items cuando cambia alcance
   useEffect(() => {
     if (!selectedFactura) return;
+
+    if (selectedFactura._esExterna) {
+      setValorExterno(selectedFactura.valor_total || 0);
+      return;
+    }
 
     if (alcance === 'TOTAL') {
       const items = selectedFactura.items || [];
@@ -140,23 +147,56 @@ const NotasCreditoView = () => {
   const cargarFacturas = async () => {
     try {
       setLoading(true);
-      const filtros = {
+      const filtrosInterna = {
         empresa_id: empresaId,
-        ...facturaFilters,
+        include_items: true,
+        para_nota_credito: true,
+        ...(facturaFilters.fechaDesde && { lapso_inicio: facturaFilters.fechaDesde }),
+        ...(facturaFilters.fechaHasta && { lapso_fin: facturaFilters.fechaHasta }),
+        ...(facturaFilters.numero    && { factura_fiscal: facturaFilters.numero }),
       };
-      const res = await facturacionService.getFacturas(filtros);
-      
-      let facturasData = [];
-      if (res.data && Array.isArray(res.data.data)) {
-        facturasData = res.data.data;
-      } else if (res.data && Array.isArray(res.data)) {
-        facturasData = res.data;
-      } else if (Array.isArray(res)) {
-        facturasData = res;
+      const filtrosExterna = {
+        empresa_id: empresaId,
+        per_page: 500,
+        ...(facturaFilters.fechaDesde && { fecha_desde: facturaFilters.fechaDesde }),
+        ...(facturaFilters.fechaHasta && { fecha_hasta: facturaFilters.fechaHasta }),
+        // factura_fiscal se filtra client-side después del merge para ambas listas
+      };
+
+      const [resInterna, resExterna] = await Promise.allSettled([
+        facturacionService.getFacturas(1, filtrosInterna),
+        facturaExternaService.getAll(filtrosExterna),
+      ]);
+
+      let facturasInternas = [];
+      if (resInterna.status === 'fulfilled') {
+        const res = resInterna.value;
+        if (res.data && Array.isArray(res.data.data)) facturasInternas = res.data.data;
+        else if (res.data && Array.isArray(res.data)) facturasInternas = res.data;
+        else if (Array.isArray(res)) facturasInternas = res;
       }
-      
+
+      let facturasExternas = [];
+      if (resExterna.status === 'fulfilled') {
+        const res = resExterna.value;
+        const data = res.data?.data || res.data || res || [];
+        facturasExternas = (Array.isArray(data) ? data : []).map((f) => ({ ...f, _esExterna: true }));
+      }
+
+      let facturasData = [...facturasInternas, ...facturasExternas];
+
+      // Filtro client-side por número de factura
+      if (facturaFilters.numero) {
+        const term = facturaFilters.numero.toLowerCase();
+        facturasData = facturasData.filter((f) => {
+          const num = String(f.factura_fiscal || f.numero || '').toLowerCase();
+          const pref = String(f.prefijo || '').toLowerCase();
+          return num.includes(term) || `${pref}-${num}`.includes(term);
+        });
+      }
+
       setFacturas(facturasData);
-      
+
       if (facturasData.length === 0) {
         Swal.fire('Información', 'No se encontraron facturas con los filtros aplicados', 'info');
       }
@@ -169,14 +209,28 @@ const NotasCreditoView = () => {
   };
 
   const handleSelectFactura = (factura) => {
-    setSelectedFactura({
-      ...factura,
-      numero: factura.factura_fiscal || factura.numero,
-      tercero_nombre: factura.tercero?.nombre_tercero || factura.tercero_nombre,
-      valor_total: parseFloat(factura.total_factura || factura.valor_total || 0),
-      fecha: factura.fecha_registro ? factura.fecha_registro.split('T')[0] : factura.fecha,
-      items: factura.items || factura.items_lista || [],
-    });
+    if (factura._esExterna) {
+      const total = parseFloat(factura.total_factura || 0);
+      setSelectedFactura({
+        ...factura,
+        numero: factura.factura_fiscal,
+        tercero_nombre: factura.tercero_id,
+        valor_total: total,
+        fecha: factura.fecha_registro ? factura.fecha_registro.split('T')[0] : '',
+        items: [],
+        _esExterna: true,
+      });
+      setValorExterno(total);
+    } else {
+      setSelectedFactura({
+        ...factura,
+        numero: factura.factura_fiscal || factura.numero,
+        tercero_nombre: factura.tercero?.nombre_tercero || factura.tercero_nombre,
+        valor_total: parseFloat(factura.total_factura || factura.valor_total || 0),
+        fecha: factura.fecha_registro ? factura.fecha_registro.split('T')[0] : factura.fecha,
+        items: factura.items || factura.items_lista || [],
+      });
+    }
   };
 
   const handleSelectItem = (itemId) => {
@@ -200,11 +254,12 @@ const NotasCreditoView = () => {
 
   const totalNota = useMemo(() => {
     if (!selectedFactura) return 0;
+    if (selectedFactura._esExterna) return valorExterno;
     if (alcance === 'TOTAL') {
       return selectedFactura.valor_total || 0;
     }
     return Object.values(itemAmounts).reduce((sum, val) => sum + val, 0);
-  }, [selectedFactura, alcance, itemAmounts]);
+  }, [selectedFactura, alcance, itemAmounts, valorExterno]);
 
   const handleCrearNota = async () => {
     if (!prefijoSeleccionado) {
@@ -215,7 +270,15 @@ const NotasCreditoView = () => {
       Swal.fire('Validación', 'Debe seleccionar una factura', 'warning');
       return;
     }
-    if (selectedItems.length === 0) {
+    if (selectedFactura?._esExterna && !conceptoId) {
+      Swal.fire('Validación', 'Debe seleccionar un concepto', 'warning');
+      return;
+    }
+    if (!observacion.trim()) {
+      Swal.fire('Validación', 'La observación es obligatoria', 'warning');
+      return;
+    }
+    if (!selectedFactura._esExterna && selectedItems.length === 0) {
       Swal.fire('Validación', 'Debe seleccionar al menos un item', 'warning');
       return;
     }
@@ -246,21 +309,32 @@ const NotasCreditoView = () => {
 
   const enviarNota = async () => {
     try {
-      const items = selectedItems.map((itemId) => ({
-        item_id: itemId,
-        valor: itemAmounts[itemId] || 0,
-      }));
+      const allItemIds = !selectedFactura._esExterna
+        ? (selectedFactura.items || []).map((item) => item.item_id || item.id)
+        : [];
+
+      const effectiveSelectedItems = selectedFactura._esExterna
+        ? []
+        : (alcance === 'TOTAL' ? allItemIds : selectedItems);
+
+      const items = selectedFactura._esExterna
+        ? [{ valor: totalNota }]
+        : effectiveSelectedItems.map((itemId) => ({
+            item_id: itemId,
+            valor: itemAmounts[itemId] || 0,
+          }));
 
       const payload = {
         empresa_id: empresaId,
         prefijo: prefijoSeleccionado,
         prefijo_factura: selectedFactura.prefijo,
         factura_fiscal: selectedFactura.numero,
-        concepto_id: conceptoId || 1, // Enviamos 1 por defecto si no hay concepto seleccionado
+        concepto_id: selectedFactura._esExterna ? conceptoId : null,
         valor_nota: totalNota,
-        observacion: observacion,
+        observacion: observacion.trim(),
         tipo_nota: tipoNota,
         alcance: alcance,
+        tipo_factura_origen: selectedFactura._esExterna ? 'EXTERNA' : 'INTERNA',
         items: items,
       };
 
@@ -299,7 +373,8 @@ const NotasCreditoView = () => {
     setSelectedFactura(null);
     setSelectedItems([]);
     setItemAmounts({});
-    setFacturaFilters({ fechaDesde: '', fechaHasta: '', tercero: '' });
+    setValorExterno(0);
+    setFacturaFilters({ fechaDesde: '', fechaHasta: '', numero: '' });
     setFacturas([]);
     cargarPrefijos();
   };
@@ -378,7 +453,9 @@ const NotasCreditoView = () => {
                 </Col>
                 <Col md={6}>
                   <Form.Group className="mb-3">
-                    <Form.Label className="fw-bold">Concepto</Form.Label>
+                    <Form.Label className="fw-bold">
+                      Concepto {selectedFactura?._esExterna ? '*' : ''}
+                    </Form.Label>
                     <Form.Select
                       value={conceptoId}
                       onChange={(e) => setConceptoId(e.target.value)}
@@ -395,13 +472,14 @@ const NotasCreditoView = () => {
               </Row>
 
               <Form.Group className="mb-3">
-                <Form.Label className="fw-bold">Observación</Form.Label>
+                <Form.Label className="fw-bold">Observación *</Form.Label>
                 <Form.Control
                   as="textarea"
                   rows={2}
                   value={observacion}
                   onChange={(e) => setObservacion(e.target.value)}
                   placeholder="Notas adicionales..."
+                  required
                 />
               </Form.Group>
             </Card.Body>
@@ -436,12 +514,12 @@ const NotasCreditoView = () => {
                   </Col>
                   <Col md={4}>
                     <Form.Group>
-                      <Form.Label>Tercero / Factura</Form.Label>
+                      <Form.Label>Número de Factura</Form.Label>
                       <Form.Control
                         type="text"
-                        placeholder="Buscar..."
-                        value={facturaFilters.tercero}
-                        onChange={(e) => setFacturaFilters({ ...facturaFilters, tercero: e.target.value })}
+                        placeholder="Ej: 1234 o FE-1234"
+                        value={facturaFilters.numero}
+                        onChange={(e) => setFacturaFilters({ ...facturaFilters, numero: e.target.value })}
                         onKeyDown={(e) => e.key === 'Enter' && cargarFacturas()}
                       />
                     </Form.Group>
@@ -473,13 +551,18 @@ const NotasCreditoView = () => {
                       <tbody>
                         {facturas.map((factura) => {
                           const numFactura = factura.factura_fiscal || factura.numero;
-                          const nombreTercero = factura.tercero?.nombre_tercero || factura.tercero_nombre;
+                          const nombreTercero = factura.tercero?.nombre_tercero || factura.tercero_nombre || factura.tercero_id;
                           const valorTotal = factura.total_factura || factura.valor_total;
                           const fecha = factura.fecha_registro ? factura.fecha_registro.split('T')[0] : factura.fecha;
                           
                           return (
-                            <tr key={factura.factura_fiscal_id || factura.id}>
-                              <td className="fw-bold text-primary">{factura.prefijo}-{numFactura}</td>
+                            <tr key={`${factura._esExterna ? 'ext' : 'int'}-${factura.factura_fiscal_id || factura.id}`}>
+                              <td className="fw-bold text-primary">
+                                {factura._esExterna && (
+                                  <Badge bg="warning" text="dark" className="me-1" style={{ fontSize: '0.65rem' }}>EXT</Badge>
+                                )}
+                                {factura.prefijo}-{numFactura}
+                              </td>
                               <td>{nombreTercero}</td>
                               <td>{fecha}</td>
                               <td className="text-end">{formatCurrency(valorTotal)}</td>
@@ -525,6 +608,7 @@ const NotasCreditoView = () => {
                     setSelectedFactura(null);
                     setSelectedItems([]);
                     setItemAmounts({});
+                    setValorExterno(0);
                   }}>
                     <FontAwesomeIcon icon={faTimesCircle} className="me-1" /> Cambiar Factura
                   </Button>
@@ -533,7 +617,32 @@ const NotasCreditoView = () => {
             </Card>
           )}
 
-          {selectedFactura && selectedFactura.items && selectedFactura.items.length > 0 && (
+          {selectedFactura?._esExterna && (
+            <Card className="mb-4 shadow-sm border-warning">
+              <Card.Header className="bg-warning text-dark">
+                <h5 className="mb-0"><FontAwesomeIcon icon={faMoneyBillWave} className="me-2" />Valor de la Nota</h5>
+              </Card.Header>
+              <Card.Body>
+                <Form.Group>
+                  <Form.Label className="fw-bold">
+                    {alcance === 'TOTAL' ? 'Valor total (calculado automáticamente)' : 'Ingrese el valor parcial'}
+                  </Form.Label>
+                  <InputGroup>
+                    <InputGroup.Text>$</InputGroup.Text>
+                    <Form.Control
+                      type="number"
+                      value={valorExterno}
+                      onChange={(e) => setValorExterno(parseFloat(e.target.value) || 0)}
+                      readOnly={alcance === 'TOTAL'}
+                      min={0}
+                    />
+                  </InputGroup>
+                </Form.Group>
+              </Card.Body>
+            </Card>
+          )}
+
+          {selectedFactura && !selectedFactura._esExterna && selectedFactura.items && selectedFactura.items.length > 0 && (
             <Card className="mb-4 shadow-sm">
               <Card.Header className="bg-secondary text-white d-flex justify-content-between align-items-center">
                 <h5 className="mb-0"><FontAwesomeIcon icon={faList} className="me-2" />Detalle de Items</h5>
@@ -591,7 +700,7 @@ const NotasCreditoView = () => {
                                   className="text-end"
                                   value={itemAmounts[itemId] || 0}
                                   onChange={(e) => handleChangeItemAmount(itemId, e.target.value)}
-                                  readOnly={alcance === 'TOTAL' || !selectedItems.includes(itemId)}
+                                  disabled={alcance === 'TOTAL'}
                                 />
                               </InputGroup>
                             </td>
@@ -641,7 +750,16 @@ const NotasCreditoView = () => {
                 size="lg"
                 className="w-100 fw-bold"
                 onClick={handleCrearNota}
-                disabled={!selectedFactura || selectedItems.length === 0 || loading}
+                disabled={
+                  !selectedFactura ||
+                  loading ||
+                  (selectedFactura._esExterna
+                    ? totalNota <= 0
+                    : alcance === 'TOTAL'
+                      ? totalNota <= 0
+                      : selectedItems.length === 0
+                  )
+                }
               >
                 {loading ? (
                   <><FontAwesomeIcon icon={faSpinner} spin className="me-2" /> Procesando...</>

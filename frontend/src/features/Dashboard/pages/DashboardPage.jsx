@@ -8,11 +8,14 @@ const DashboardPage = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [selectedModule, setSelectedModule] = useState(null);
+  const [modulosPermitidos, setModulosPermitidos] = useState([]);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
-      setUser(JSON.parse(userData));
+      const parsed = JSON.parse(userData);
+      setUser(parsed);
+      setModulosPermitidos(parsed.modulos || []);
     }
   }, []);
 
@@ -130,6 +133,15 @@ const DashboardPage = () => {
           action: () => navigate('/facturas'),
           buttonText: 'Ver Histórico',
           buttonColor: 'primary'
+        },
+        {
+          id: 'externas',
+          title: 'Cargar Facturas Externas',
+          icon: 'fa-file-upload',
+          description: 'Carga masiva de facturas externas mediante archivo CSV.',
+          action: () => navigate('/facturas-externas'),
+          buttonText: 'Cargar CSV',
+          buttonColor: 'warning'
         }
       ]
     },
@@ -157,6 +169,87 @@ const DashboardPage = () => {
           action: () => navigate('/notas-historico'),
           buttonText: 'Ver Histórico',
           buttonColor: 'primary'
+        },
+        {
+          id: 'conceptos',
+          title: 'Parametrizar Conceptos',
+          icon: 'fa-tags',
+          description: 'Crea y gestiona los conceptos disponibles para notas crédito.',
+          action: () => navigate('/notas-conceptos'),
+          buttonText: 'Gestionar Conceptos',
+          buttonColor: 'warning'
+        }
+      ]
+    },
+    {
+      id: 'usuarios',
+      title: 'GESTIÓN DE USUARIOS',
+      icon: 'fa-user-shield',
+      description: 'Administra usuarios y permisos de acceso a módulos.',
+      color: '#4a235a',
+      subModules: [
+        {
+          id: 'permisos',
+          title: 'Permisos por Módulo',
+          icon: 'fa-lock',
+          description: 'Asigna o revoca acceso a módulos por usuario.',
+          action: () => navigate('/usuarios/permisos'),
+          buttonText: 'Gestionar Permisos',
+          buttonColor: 'primary'
+        }
+      ]
+    },
+    {
+      id: 'causacion',
+      title: 'CAUSACIÓN',
+      icon: 'fa-money-bill-wave',
+      description: 'Registra pagos, aplica anticipos y cruza saldos de facturas.',
+      color: '#1a5276',
+      subModules: [
+        {
+          id: 'pagos',
+          title: 'Registrar Pagos',
+          icon: 'fa-money-check-alt',
+          description: 'Selecciona un tercero y aplica pagos a sus facturas pendientes.',
+          action: () => navigate('/causacion'),
+          buttonText: 'Ir a Causación',
+          buttonColor: 'primary'
+        },
+        {
+          id: 'reporte',
+          title: 'Reporte de Facturas y Pagos',
+          icon: 'fa-file-excel',
+          description: 'Genera y descarga en Excel el reporte de facturas (internas y externas) y pagos por fecha.',
+          action: () => navigate('/causacion/reporte'),
+          buttonText: 'Generar Reporte',
+          buttonColor: 'success'
+        }
+      ]
+    },
+    {
+      id: 'cotizaciones',
+      title: 'COTIZACIONES',
+      icon: 'fa-file-alt',
+      description: 'Crea y gestiona cotizaciones. Conviértelas en órdenes de servicio al ser aprobadas.',
+      color: '#117a65',
+      subModules: [
+        {
+          id: 'list',
+          title: 'Consultar Cotizaciones',
+          icon: 'fa-list',
+          description: 'Consulta y gestiona el listado de cotizaciones.',
+          action: () => navigate('/cotizaciones'),
+          buttonText: 'Ver Cotizaciones',
+          buttonColor: 'primary'
+        },
+        {
+          id: 'new',
+          title: 'Nueva Cotización',
+          icon: 'fa-plus-circle',
+          description: 'Crea una nueva cotización para un cliente.',
+          action: () => navigate('/cotizaciones/new'),
+          buttonText: 'Crear Cotización',
+          buttonColor: 'success'
         }
       ]
     }
@@ -168,11 +261,19 @@ const DashboardPage = () => {
         <Col>
           <h2>Bienvenido, {user?.primer_nombre || 'SIMDE'} {user?.primer_apellido || 'SIIS'}</h2>
           <p className="text-muted">Sistema Integral de Gestión - SIMDE ADMON</p>
+          {modulosPermitidos.length === 0 && (
+            <div className="alert alert-warning mt-3" role="alert">
+              <i className="fas fa-exclamation-triangle me-2"></i>
+              No tienes módulos asignados. Contacta al administrador del sistema.
+            </div>
+          )}
         </Col>
       </Row>
 
       <Row className="g-4">
-        {modules.map((module) => (
+        {modules
+          .filter((m) => modulosPermitidos.includes(m.id))
+          .map((module) => (
           <Col key={module.id} lg={6} xl={4}>
             <Card 
               className="module-card h-100" 
