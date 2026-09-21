@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import MainLayout from '../../../components/Layout/MainLayout';
 import BackToDashboard from '../../../components/BackToDashboard/BackToDashboard';
 import CotizacionesListView from '../views/CotizacionesListView';
+import EnviarEmailModal from '../views/EnviarEmailModal';
 import useCotizaciones from '../hooks/useCotizaciones';
 import cotizacionService from '../services/cotizacionService';
 
@@ -128,20 +129,17 @@ const CotizacionesListPage = () => {
   // ── Email ──────────────────────────────────────────────────────────────────
   const [showEmailModal,    setShowEmailModal]    = useState(false);
   const [cotizacionEmail,   setCotizacionEmail]   = useState(null);
-  const [emailDest,         setEmailDest]         = useState('');
   const [loadingEmail,      setLoadingEmail]      = useState(false);
 
   const handleEnviarEmail = (c) => {
     setCotizacionEmail(c);
-    setEmailDest(c.tercero?.email || '');
     setShowEmailModal(true);
   };
 
-  const handleEmailConfirm = async () => {
-    if (!emailDest) { toast.error('Ingrese un correo destinatario'); return; }
+  const handleEmailConfirm = async (email, adjuntos, datosOrden) => {
     try {
       setLoadingEmail(true);
-      const res = await cotizacionService.enviarEmail(cotizacionEmail.cotizacion_id, emailDest);
+      const res = await cotizacionService.enviarEmail(cotizacionEmail.cotizacion_id, email, adjuntos, datosOrden);
       toast.success(res.message);
       setShowEmailModal(false);
       refetch();
@@ -367,37 +365,16 @@ const CotizacionesListPage = () => {
       </Modal>
 
       {/* Modal: Enviar por correo */}
-      <Modal show={showEmailModal} onHide={() => setShowEmailModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <i className="fas fa-envelope me-2 text-dark"></i>Enviar Cotización por Correo
-          </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p className="text-muted mb-3">
-            Se enviará la cotización <strong>{cotizacionEmail?.numero_cotizacion}</strong> con el PDF adjunto.
-          </p>
-          <Form.Group>
-            <Form.Label className="fw-bold">Correo destinatario <span className="text-danger">*</span></Form.Label>
-            <Form.Control
-              type="email"
-              placeholder="correo@ejemplo.com"
-              value={emailDest}
-              onChange={(e) => setEmailDest(e.target.value)}
-              autoFocus
-            />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowEmailModal(false)}>Cancelar</Button>
-          <Button variant="dark" onClick={handleEmailConfirm} disabled={loadingEmail}>
-            {loadingEmail
-              ? <><span className="spinner-border spinner-border-sm me-1" />Enviando...</>
-              : <><i className="fas fa-paper-plane me-1"></i>Enviar</>
-            }
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      <EnviarEmailModal
+        show={showEmailModal}
+        onHide={() => setShowEmailModal(false)}
+        numeroCotizacion={cotizacionEmail?.numero_cotizacion}
+        emailInicial={cotizacionEmail?.tercero?.email}
+        conAprobacion={['borrador', 'enviada'].includes(cotizacionEmail?.sw_estado)}
+        datosOrdenInicial={cotizacionEmail?.datos_orden}
+        loading={loadingEmail}
+        onConfirm={handleEmailConfirm}
+      />
     </MainLayout>
   );
 };

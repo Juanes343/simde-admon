@@ -26,6 +26,15 @@
           </td>
         </tr>
 
+        {{-- ── AVISO DE COPIA INTERNA ── --}}
+        @if(!empty($copiaPara))
+        <tr>
+          <td style="background:#fff8e1; border-bottom:1px solid #ffe082; padding:10px 40px; text-align:center; font-size:12px; color:#8a6d00;">
+            Copia interna — esta cotización fue enviada a <strong>{{ $copiaPara }}</strong>.
+          </td>
+        </tr>
+        @endif
+
         {{-- ── SALUDO ── --}}
         <tr>
           <td style="padding:32px 40px 0;">
@@ -195,6 +204,31 @@
         </tr>
         @endif
 
+        {{-- ── APROBACIÓN EN LÍNEA ── --}}
+        @if(!empty($enlaceAprobacion))
+        <tr>
+          <td style="padding:24px 40px 0;">
+            <div style="background:#f0f8ff; border:1px solid #aed6f1; border-radius:6px; padding:20px 18px; text-align:center;">
+              <p style="margin:0 0 14px; font-size:13px; color:#1a5276; line-height:1.6;">
+                Puede revisar esta cotización y <strong>aprobarla con su firma</strong> directamente en línea:
+              </p>
+              <a href="{{ $enlaceAprobacion }}"
+                 style="display:inline-block; background:#1a8a6a; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; padding:12px 28px; border-radius:6px;">
+                Revisar y aprobar cotización
+              </a>
+              @if(!empty($enlaceExpiraEn))
+              <p style="margin:12px 0 0; font-size:11px; color:#888;">
+                El enlace estará disponible hasta el {{ $enlaceExpiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
+              </p>
+              @endif
+              <p style="margin:10px 0 0; font-size:11px; color:#888; word-break:break-all;">
+                Si el botón no funciona, copie este enlace en su navegador:<br>{{ $enlaceAprobacion }}
+              </p>
+            </div>
+          </td>
+        </tr>
+        @endif
+
         {{-- ── MENSAJE PDF ADJUNTO ── --}}
         <tr>
           <td style="padding:24px 40px 0;">
@@ -211,7 +245,11 @@
           <td style="padding:28px 40px;">
             <p style="margin:0; font-size:14px; line-height:1.7; color:#444;">
               Quedamos atentos a cualquier consulta o aclaración que requiera sobre esta cotización.
-              Para aceptarla o solicitar ajustes, puede responder directamente a este correo.
+              @if(!empty($enlaceAprobacion))
+                Para aceptarla utilice el botón de aprobación; si requiere ajustes, puede responder directamente a este correo.
+              @else
+                Para aceptarla o solicitar ajustes, puede responder directamente a este correo.
+              @endif
             </p>
             <p style="margin:18px 0 0; font-size:14px; color:#2c3e50;">
               Cordialmente,<br>

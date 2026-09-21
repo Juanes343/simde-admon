@@ -22,6 +22,14 @@ const CotizacionDetailView = ({ cotizacion, onDescargarPdf, onEnviarEmail }) => 
     return `${day}/${month}/${year}`;
   };
 
+  const formatDateTime = (d) => {
+    if (!d) return '';
+    const date = new Date(d);
+    return Number.isNaN(date.getTime())
+      ? ''
+      : date.toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' });
+  };
+
   const estadoCfg = ESTADO_CONFIG[cotizacion.sw_estado] || { label: cotizacion.sw_estado, variant: 'secondary' };
   const tercero   = cotizacion.tercero;
 
@@ -82,6 +90,27 @@ const CotizacionDetailView = ({ cotizacion, onDescargarPdf, onEnviarEmail }) => 
                 <p className="mb-1 text-muted small text-uppercase fw-bold">Orden de Servicio</p>
                 <p className="mb-3">
                   <Badge bg="primary">ID #{cotizacion.orden_servicio_id}</Badge>
+                </p>
+              </Col>
+            )}
+            {cotizacion.fecha_firma && (
+              <Col md={6}>
+                <p className="mb-1 text-muted small text-uppercase fw-bold">Aprobada y firmada por el cliente</p>
+                <p className="mb-3">
+                  <i className="fas fa-file-signature text-success me-1"></i>
+                  {cotizacion.firmante_nombre}
+                  {cotizacion.firmante_documento && <span className="text-muted"> (Doc. {cotizacion.firmante_documento})</span>}
+                  <span className="text-muted small ms-2">{formatDateTime(cotizacion.fecha_firma)}</span>
+                </p>
+              </Col>
+            )}
+            {cotizacion.fecha_rechazo && (
+              <Col md={6}>
+                <p className="mb-1 text-muted small text-uppercase fw-bold">Rechazada por el cliente</p>
+                <p className="mb-3">
+                  <i className="fas fa-times-circle text-danger me-1"></i>
+                  {cotizacion.motivo_rechazo || 'Sin motivo indicado'}
+                  <span className="text-muted small ms-2">{formatDateTime(cotizacion.fecha_rechazo)}</span>
                 </p>
               </Col>
             )}

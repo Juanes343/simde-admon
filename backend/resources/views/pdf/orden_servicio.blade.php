@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cotización {{ $cotizacion->numero_cotizacion }}</title>
+    <title>Orden de Servicio {{ $doc['numero_orden'] }}</title>
     <style>
         @page {
             margin: 0;
@@ -224,67 +224,70 @@
             </td>
             <td style="width:35%; vertical-align:middle; text-align:right;">
                 <div class="doc-box">
-                    <div class="doc-tipo">COTIZACIÓN</div>
-                    <div class="doc-numero">{{ $cotizacion->numero_cotizacion }}</div>
-                    <div class="doc-estado">{{ strtoupper($cotizacion->sw_estado) }}</div>
+                    <div class="doc-tipo">ORDEN DE SERVICIO</div>
+                    <div class="doc-numero">{{ $doc['numero_orden'] }}</div>
+                    <div class="doc-estado">
+                        @if($doc['cotizacion_numero'])
+                            Ref. {{ $doc['cotizacion_numero'] }}
+                        @else
+                            {{ $doc['estado_orden'] }}
+                        @endif
+                    </div>
                 </div>
             </td>
         </tr>
     </table>
 </div>
 
-{{-- ═══════════════════ CLIENTE / FECHAS / CONDICIONES ═══════════════════ --}}
+{{-- ═══════════════════ CLIENTE / VIGENCIA / FACTURACIÓN ═══════════════════ --}}
 <table class="info-section" style="margin-bottom:14px;">
     <tr>
         {{-- Cliente --}}
         <td style="width:55%; padding-right:8px; vertical-align:top;">
             <div class="info-box">
                 <div class="label">Cliente</div>
-                @php $tercero = $cotizacion->tercero; @endphp
-                <div class="value">{{ $tercero?->nombre_tercero ?? $cotizacion->tercero_id }}</div>
+                <div class="value">{{ $doc['cliente']['nombre'] }}</div>
                 <div class="sub-value">
-                    {{ $cotizacion->tipo_id_tercero }} {{ $cotizacion->tercero_id }}
-                    @if($tercero?->email)
-                        &nbsp;·&nbsp; {{ $tercero->email }}
+                    {{ $doc['cliente']['tipo_id'] }} {{ $doc['cliente']['id'] }}
+                    @if($doc['cliente']['email'])
+                        &nbsp;·&nbsp; {{ $doc['cliente']['email'] }}
                     @endif
-                    @if($tercero?->telefono)
-                        &nbsp;·&nbsp; Tel. {{ $tercero->telefono }}
+                    @if($doc['cliente']['telefono'])
+                        &nbsp;·&nbsp; Tel. {{ $doc['cliente']['telefono'] }}
                     @endif
                 </div>
-                @if($tercero?->direccion)
-                    <div class="sub-value" style="margin-top:2px;">{{ $tercero->direccion }}</div>
+                @if($doc['cliente']['direccion'])
+                    <div class="sub-value" style="margin-top:2px;">{{ $doc['cliente']['direccion'] }}</div>
                 @endif
             </div>
         </td>
 
-        {{-- Fechas --}}
+        {{-- Vigencia --}}
         <td style="width:22%; padding-right:8px; vertical-align:top;">
             <div class="info-box">
-                <div class="label">Fecha Emisión</div>
-                <div class="value">{{ \Carbon\Carbon::parse($cotizacion->fecha_emision)->format('d/m/Y') }}</div>
+                <div class="label">Fecha Inicio</div>
+                <div class="value">{{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}</div>
             </div>
             <div class="info-box mt8">
-                <div class="label">Válida Hasta</div>
-                <div class="value" style="color:#c0392b;">
-                    {{ $cotizacion->fecha_vencimiento ? \Carbon\Carbon::parse($cotizacion->fecha_vencimiento)->format('d/m/Y') : '—' }}
-                </div>
+                <div class="label">Fecha Fin</div>
+                <div class="value" style="color:#c0392b;">{{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}</div>
             </div>
         </td>
 
-        {{-- Condiciones --}}
+        {{-- Facturación --}}
         <td style="width:23%; vertical-align:top;">
             <div class="info-box">
-                <div class="label">Método de Pago</div>
-                <div class="value" style="font-size:10px;">{{ $cotizacion->metodo_pago ?? '—' }}</div>
+                <div class="label">Periodo de Facturación</div>
+                <div class="value" style="font-size:10px;">Cada {{ $doc['periodo_dias'] }} días</div>
             </div>
             <div class="info-box mt8">
-                <div class="label">Tipo de Pago</div>
-                <div class="value" style="font-size:10px;">{{ $cotizacion->tipo_pago ?? '—' }}</div>
+                <div class="label">Prórroga Automática</div>
+                <div class="value" style="font-size:10px;">{{ $doc['prorroga'] ? 'Sí' : 'No' }}</div>
             </div>
-            @if($cotizacion->orden_compra)
+            @if($doc['orden_compra'])
             <div class="info-box mt8">
                 <div class="label">Orden de Compra</div>
-                <div class="value" style="font-size:10px;">{{ $cotizacion->orden_compra }}</div>
+                <div class="value" style="font-size:10px;">{{ $doc['orden_compra'] }}</div>
             </div>
             @endif
         </td>
@@ -309,39 +312,32 @@
         </tr>
     </thead>
     <tbody>
-        @foreach($cotizacion->items as $i => $item)
-        @php
-            $subtotal   = floatval($item->subtotal);
-            $baseNeta   = $subtotal * (1 - floatval($item->porcentaje_descuento ?? 0) / 100);
-            $impPct     = floatval($item->impuesto?->porcentaje ?? 0);
-            $retPct     = floatval($item->porcentaje_ret_fuente ?? 0);
-            $total      = $baseNeta * (1 + $impPct / 100) - $baseNeta * $retPct / 100;
-        @endphp
+        @foreach($doc['items'] as $i => $item)
         <tr>
             <td class="text-center">{{ $i + 1 }}</td>
-            <td>{{ $item->referencia ?? '—' }}</td>
+            <td>{{ $item['ref'] ?? '—' }}</td>
             <td>
-                {{ $item->descripcion }}
-                @if($item->observaciones)
-                    <br><span style="color:#777; font-size:8px;">{{ $item->observaciones }}</span>
+                {{ $item['descripcion'] }}
+                @if($item['observaciones'])
+                    <br><span style="color:#777; font-size:8px;">{{ $item['observaciones'] }}</span>
                 @endif
             </td>
-            <td class="text-center">{{ number_format(floatval($item->cantidad), 2) }}</td>
-            <td class="text-center">{{ $item->tipo_unidad ?? '—' }}</td>
-            <td class="text-right">$ {{ number_format(floatval($item->precio_unitario), 2, ',', '.') }}</td>
-            <td class="text-center">{{ number_format(floatval($item->porcentaje_descuento ?? 0), 2) }}%</td>
+            <td class="text-center">{{ number_format($item['cantidad'], 2) }}</td>
+            <td class="text-center">{{ $item['unidad'] ?? '—' }}</td>
+            <td class="text-right">$ {{ number_format($item['precio'], 2, ',', '.') }}</td>
+            <td class="text-center">{{ number_format($item['descuento'], 2) }}%</td>
             <td class="text-center">
-                @if($item->impuesto)
-                    <span class="imp-badge">{{ $item->impuesto->nombre_impuesto ?? 'IVA' }} {{ number_format($impPct, 0) }}%</span>
+                @if($item['impuesto'])
+                    <span class="imp-badge">{{ $item['impuesto'] }}</span>
                 @else
                     <span style="color:#888; font-size:8px;">Excluido</span>
                 @endif
-                @if($retPct > 0)
-                    <br><span style="color:#c0392b; font-size:8px;">Ret {{ number_format($retPct, 2) }}%</span>
+                @if($item['retencion'] > 0)
+                    <br><span style="color:#c0392b; font-size:8px;">Ret {{ number_format($item['retencion'], 2) }}%</span>
                 @endif
             </td>
-            <td class="text-right">$ {{ number_format($subtotal, 2, ',', '.') }}</td>
-            <td class="text-right" style="font-weight:700;">$ {{ number_format($total, 2, ',', '.') }}</td>
+            <td class="text-right">$ {{ number_format($item['subtotal'], 2, ',', '.') }}</td>
+            <td class="text-right" style="font-weight:700;">$ {{ number_format($item['total'], 2, ',', '.') }}</td>
         </tr>
         @endforeach
     </tbody>
@@ -353,35 +349,29 @@
         <table class="totales-table">
             <tr>
                 <td style="color:#555;">Subtotal</td>
-                <td class="text-right">$ {{ number_format(floatval($cotizacion->subtotal), 2, ',', '.') }}</td>
+                <td class="text-right">$ {{ number_format($doc['totales']['subtotal'], 2, ',', '.') }}</td>
             </tr>
-            @if(floatval($cotizacion->descuento_total) > 0)
+            @if($doc['totales']['descuento'] > 0)
             <tr>
                 <td style="color:#c0392b;">— Descuento</td>
-                <td class="text-right" style="color:#c0392b;">- $ {{ number_format(floatval($cotizacion->descuento_total), 2, ',', '.') }}</td>
+                <td class="text-right" style="color:#c0392b;">- $ {{ number_format($doc['totales']['descuento'], 2, ',', '.') }}</td>
             </tr>
             @endif
-            @if(floatval($cotizacion->impuestos_total) > 0)
+            @if($doc['totales']['impuestos'] > 0)
             <tr>
                 <td style="color:#1a8a6a;">+ Impuestos</td>
-                <td class="text-right" style="color:#1a8a6a;">$ {{ number_format(floatval($cotizacion->impuestos_total), 2, ',', '.') }}</td>
+                <td class="text-right" style="color:#1a8a6a;">$ {{ number_format($doc['totales']['impuestos'], 2, ',', '.') }}</td>
             </tr>
             @endif
-            @php
-                $retencionTotal = $cotizacion->items->sum(function($item) {
-                    $base = floatval($item->subtotal) * (1 - floatval($item->porcentaje_descuento ?? 0) / 100);
-                    return $base * floatval($item->porcentaje_ret_fuente ?? 0) / 100;
-                });
-            @endphp
-            @if($retencionTotal > 0)
+            @if($doc['totales']['retencion'] > 0)
             <tr>
                 <td style="color:#e67e22;">— Retención en fuente</td>
-                <td class="text-right" style="color:#e67e22;">- $ {{ number_format($retencionTotal, 2, ',', '.') }}</td>
+                <td class="text-right" style="color:#e67e22;">- $ {{ number_format($doc['totales']['retencion'], 2, ',', '.') }}</td>
             </tr>
             @endif
             <tr class="total-row">
                 <td>TOTAL</td>
-                <td class="text-right">$ {{ number_format(floatval($cotizacion->total), 2, ',', '.') }}</td>
+                <td class="text-right">$ {{ number_format($doc['totales']['total'], 2, ',', '.') }}</td>
             </tr>
         </table>
     </div>
@@ -389,85 +379,98 @@
 
 {{-- ═══════════════════ CONDICIONES / NOTAS ═══════════════════ --}}
 <div class="conditions-section">
-    @if($cotizacion->notas)
+    @if($doc['notas'])
     <div class="conditions-title">Notas y Observaciones</div>
-    <div class="notes-box">{!! nl2br(e($cotizacion->notas)) !!}</div>
+    <div class="notes-box">{!! nl2br(e($doc['notas'])) !!}</div>
     @endif
 
     <div class="conditions-title" style="margin-top:12px;">Condiciones Generales</div>
     <table class="conditions-table">
         <tr>
-            <td class="cond-label">Validez de la oferta:</td>
+            <td class="cond-label">Vigencia de la orden:</td>
             <td>
-                @if($cotizacion->fecha_vencimiento)
-                    Hasta el {{ \Carbon\Carbon::parse($cotizacion->fecha_vencimiento)->format('d/m/Y') }}
-                @else
-                    30 días a partir de la fecha de emisión
+                Del {{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}
+                al {{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}
+                @if($doc['prorroga'])
+                    (con prórroga automática)
                 @endif
             </td>
             <td class="cond-label" style="padding-left:20px;">Forma de pago:</td>
-            <td>{{ $cotizacion->tipo_pago ?? 'Contado' }}</td>
+            <td>{{ $doc['tipo_pago'] ?? '—' }}</td>
+        </tr>
+        <tr>
+            <td class="cond-label">Periodo de facturación:</td>
+            <td>Cada {{ $doc['periodo_dias'] }} días</td>
+            <td class="cond-label" style="padding-left:20px;">Cotización origen:</td>
+            <td>{{ $doc['cotizacion_numero'] ?? 'N/A' }}</td>
         </tr>
         <tr>
             <td class="cond-label">Método de pago:</td>
-            <td>{{ $cotizacion->metodo_pago ?? '—' }}</td>
+            <td>{{ $doc['metodo_pago'] ?? '—' }}</td>
             <td class="cond-label" style="padding-left:20px;">Orden de compra:</td>
-            <td>{{ $cotizacion->orden_compra ?? 'N/A' }}</td>
+            <td>{{ $doc['orden_compra'] ?? 'N/A' }}</td>
         </tr>
     </table>
 </div>
 
-{{-- ═══════════════════ APROBACIÓN DEL CLIENTE (solo si ya fue firmada) ═══════════════════ --}}
-@if($cotizacion->fecha_firma)
+{{-- ═══════════════════ ACEPTACIÓN Y FIRMA DEL CLIENTE ═══════════════════ --}}
+@php $firma = $doc['firma']; @endphp
 <div class="conditions-section" style="page-break-inside: avoid;">
-    <div class="conditions-title">Aprobación del Cliente</div>
+    <div class="conditions-title">Aceptación del Cliente</div>
     <table class="conditions-table">
         <tr>
             <td style="width:45%; vertical-align:bottom;">
-                @if($cotizacion->firma_cliente)
-                    <img src="{{ $cotizacion->firma_cliente }}" alt="Firma del cliente" style="max-width:220px; max-height:80px;">
+                @if($firma && $firma['imagen'])
+                    <img src="{{ $firma['imagen'] }}" alt="Firma del cliente" style="max-width:220px; max-height:80px;">
+                @else
+                    <div style="height:60px;"></div>
                 @endif
                 <div style="border-top:1px solid #2c3e50; width:220px; margin-top:2px; padding-top:3px; font-size:8px; color:#777;">
                     Firma del cliente
                 </div>
             </td>
             <td style="width:55%; vertical-align:top; padding-left:20px;">
+                @if($firma)
                 <table class="conditions-table">
+                    @if($firma['nombre'])
                     <tr>
                         <td class="cond-label">Nombre:</td>
-                        <td>{{ $cotizacion->firmante_nombre ?? '—' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="cond-label">Documento:</td>
-                        <td>{{ $cotizacion->firmante_documento ?? '—' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="cond-label">Fecha de firma:</td>
-                        <td>{{ $cotizacion->fecha_firma->setTimezone('America/Bogota')->format('d/m/Y H:i') }}</td>
-                    </tr>
-                    @if($cotizacion->firma_ip)
-                    <tr>
-                        <td class="cond-label">Dirección IP:</td>
-                        <td>{{ $cotizacion->firma_ip }}</td>
+                        <td>{{ $firma['nombre'] }}</td>
                     </tr>
                     @endif
-                    @if($cotizacion->ordenServicio)
+                    @if($firma['documento'])
                     <tr>
-                        <td class="cond-label">Orden de servicio:</td>
-                        <td>{{ $cotizacion->ordenServicio->numero_orden }}</td>
+                        <td class="cond-label">Documento:</td>
+                        <td>{{ $firma['documento'] }}</td>
+                    </tr>
+                    @endif
+                    @if($firma['fecha'])
+                    <tr>
+                        <td class="cond-label">Fecha de firma:</td>
+                        <td>{{ \Carbon\Carbon::parse($firma['fecha'])->setTimezone('America/Bogota')->format('d/m/Y H:i') }}</td>
+                    </tr>
+                    @endif
+                    @if($firma['ip'])
+                    <tr>
+                        <td class="cond-label">Dirección IP:</td>
+                        <td>{{ $firma['ip'] }}</td>
                     </tr>
                     @endif
                 </table>
+                @else
+                    <div style="font-size:10px; font-weight:700; color:#c0392b;">Pendiente de firma</div>
+                @endif
             </td>
         </tr>
     </table>
 </div>
-@endif
 
 {{-- ═══════════════════════════ PIE ═══════════════════════════ --}}
 <div class="footer">
     <strong>SIMDE SAS</strong> · drondon@simde.com.co<br>
-    Este documento es una cotización y no constituye una factura de venta.<br>
+    @if($doc['cotizacion_numero'] && $firma)
+        Orden de servicio generada a partir de la cotización {{ $doc['cotizacion_numero'] }}, aprobada y firmada digitalmente por el cliente.<br>
+    @endif
     Generado el {{ \Carbon\Carbon::now()->setTimezone('America/Bogota')->format('d/m/Y H:i') }} (hora Colombia)
 </div>
 

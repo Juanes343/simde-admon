@@ -26,7 +26,20 @@ class Cotizacion extends Model
         'sw_estado',
         'orden_servicio_id',
         'usuario_id',
+        'token_aprobacion',
+        'token_aprobacion_expira_en',
+        'datos_orden',
+        'firma_cliente',
+        'firmante_nombre',
+        'firmante_documento',
+        'firma_ip',
+        'fecha_firma',
+        'motivo_rechazo',
+        'fecha_rechazo',
     ];
+
+    // El token y la imagen de la firma no viajan en las respuestas JSON del panel
+    protected $hidden = ['token_aprobacion', 'firma_cliente'];
 
     protected $casts = [
         'fecha_emision'     => 'date',
@@ -35,6 +48,10 @@ class Cotizacion extends Model
         'descuento_total'   => 'decimal:2',
         'impuestos_total'   => 'decimal:2',
         'total'             => 'decimal:2',
+        'datos_orden'                => 'array',
+        'token_aprobacion_expira_en' => 'datetime',
+        'fecha_firma'                => 'datetime',
+        'fecha_rechazo'              => 'datetime',
     ];
 
     protected $appends = ['tercero'];

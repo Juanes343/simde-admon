@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Button, Form, InputGroup, Modal } from 'reac
 import { useNavigate } from 'react-router-dom';
 import useOrdenesServicio from '../hooks/useOrdenesServicio';
 import OrdenesServicioListView from '../views/OrdenesServicioListView';
+import EnviarOrdenEmailModal from '../views/EnviarOrdenEmailModal';
 import ConfirmModal from '../../../components/ConfirmModal/ConfirmModal';
 import ordenServicioService from '../services/ordenServicioService';
 import { terceroService } from '../../Terceros/services/terceroService';
@@ -26,6 +27,11 @@ const OrdenesServicioListPage = () => {
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [ordenToToggle, setOrdenToToggle] = useState(null);
+
+  // Estado para modal de envío por correo
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [ordenEmail, setOrdenEmail] = useState(null);
+  const [emailLoading, setEmailLoading] = useState(false);
 
   // Cargar terceros para el filtro
   React.useEffect(() => {
@@ -111,27 +117,46 @@ const OrdenesServicioListPage = () => {
     setShowSignatureModal(true);
   };
 
+  const handleDownloadPdf = async (orden) => {
+    try {
+      await ordenServicioService.descargarPdf(orden.orden_servicio_id, orden.numero_orden);
+    } catch (error) {
+      console.error('Error al descargar PDF:', error);
+      toast.error('No se pudo descargar el PDF de la orden.');
+    }
+  };
+
+  const handleSendEmail = (orden) => {
+    setOrdenEmail(orden);
+    setShowEmailModal(true);
+  };
+
+  const confirmSendEmail = async (email) => {
+    try {
+      setEmailLoading(true);
+      const res = await ordenServicioService.enviarEmail(ordenEmail.orden_servicio_id, email);
+      toast.success(res.message);
+      setShowEmailModal(false);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Error al enviar el correo');
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
   const confirmSignatureRequest = async () => {
     if (!ordenForSignature) return;
 
     setSignatureLoading(true);
     try {
       const response = await ordenServicioService.solicitarFirma(ordenForSignature.orden_servicio_id);
-      
-      // Si estamos en desarrollo, mostrar el link para probar
-      if (response.link_debug) {
-        console.log('LINK DE FIRMA (DEBUG):', response.link_debug);
-        toast.info('Link generado (ver consola)');
-        // Opción: abrir en nueva pestaña para probar
-        // window.open(response.link_debug, '_blank');
-      }
-      
+
       toast.success(response.message || 'Solicitud enviada exitosamente');
       setShowSignatureModal(false);
       setOrdenForSignature(null);
     } catch (error) {
       console.error('Error al solicitar firma:', error);
-      toast.error('Error al enviar la solicitud de firma.');
+      toast.error(error.response?.data?.message || 'Error al enviar la solicitud de firma.');
     } finally {
       setSignatureLoading(false);
     }
@@ -209,6 +234,8 @@ const OrdenesServicioListPage = () => {
             onDelete={handleDeleteClick}
             onView={handleView}
             onRequestSignature={handleRequestSignature}
+            onDownloadPdf={handleDownloadPdf}
+            onSendEmail={handleSendEmail}
           />
         </Card.Body>
       </Card>
@@ -238,6 +265,16 @@ const OrdenesServicioListPage = () => {
           </Button>
         </div>
       )}
+
+      {/* Modal para enviar la orden por correo */}
+      <EnviarOrdenEmailModal
+        show={showEmailModal}
+        onHide={() => !emailLoading && setShowEmailModal(false)}
+        numeroOrden={ordenEmail?.numero_orden}
+        emailInicial={ordenEmail?.tercero?.email}
+        loading={emailLoading}
+        onConfirm={confirmSendEmail}
+      />
 
       {/* Modal de confirmación para Firma */}
       <Modal show={showSignatureModal} onHide={() => !signatureLoading && setShowSignatureModal(false)}>

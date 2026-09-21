@@ -20,6 +20,7 @@ use App\Http\Controllers\FacturaExternaController;
 use App\Http\Controllers\UsuarioModuloController;
 use App\Http\Controllers\CausacionController;
 use App\Http\Controllers\CotizacionController;
+use App\Http\Controllers\CotizacionAprobacionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -32,8 +33,17 @@ Route::get('/ping', function () {
 });
 
 // Rutas Públicas de Firma Digital
-Route::get('/public/ordenes-servicio/{id}/firmar/{token}', [FirmaDigitalController::class, 'verificarToken']);
-Route::post('/public/ordenes-servicio/firmar', [FirmaDigitalController::class, 'firmar']);
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/public/ordenes-servicio/{id}/firmar/{token}', [FirmaDigitalController::class, 'verificarToken']);
+    Route::post('/public/ordenes-servicio/{id}/firmar/{token}', [FirmaDigitalController::class, 'firmar']);
+});
+
+// Rutas Públicas de Aprobación de Cotizaciones (enlace del correo: el cliente revisa, aprueba y firma o rechaza)
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('/public/cotizaciones/{id}/aprobar/{token}', [CotizacionAprobacionController::class, 'ver']);
+    Route::post('/public/cotizaciones/{id}/aprobar/{token}', [CotizacionAprobacionController::class, 'aprobar']);
+    Route::post('/public/cotizaciones/{id}/rechazar/{token}', [CotizacionAprobacionController::class, 'rechazar']);
+});
 
 // Facturación Electrónica (DataIco)
 Route::post('/electronic-invoicing/send', [ElectronicInvoicingController::class, 'sendInvoice']);
@@ -120,6 +130,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/ordenes-servicio/{id}', [OrdenServicioController::class, 'show']);
     Route::put('/ordenes-servicio/{id}', [OrdenServicioController::class, 'update']);
     Route::delete('/ordenes-servicio/{id}', [OrdenServicioController::class, 'destroy']);
+    Route::get('/ordenes-servicio/{id}/pdf', [OrdenServicioController::class, 'descargarPdf']);
+    Route::post('/ordenes-servicio/{id}/enviar-email', [OrdenServicioController::class, 'enviarEmail']);
     
     // Notas Crédito
     Route::get('/notas-credito', [NotaCreditoController::class, 'index']);

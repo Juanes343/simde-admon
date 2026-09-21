@@ -63,6 +63,9 @@ class OrdenServicio extends Model
         'signature_token_expires_at',
         'firma_tercero',
         'fecha_firma',
+        'firmante_nombre',
+        'firmante_documento',
+        'firma_ip',
     ];
 
     protected $casts = [
@@ -75,6 +78,10 @@ class OrdenServicio extends Model
     ];
 
     protected $appends = ['tercero'];
+
+    // La imagen de la firma (base64) es pesada y el frontend solo necesita saber si hay firma (fecha_firma)
+    // y el token del enlace de firma es un secreto que no debe salir en las respuestas
+    protected $hidden = ['firma_tercero', 'signature_token'];
 
     /**
      * Obtener el tercero asociado (composite key)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solicitud de firma — Orden de servicio {{ $doc['numero_orden'] }}</title>
+    <title>Orden de servicio {{ $doc['numero_orden'] }} firmada — SIMDE SAS</title>
 </head>
 <body style="margin:0; padding:0; background:#f0f4f8; font-family: Arial, Helvetica, sans-serif; font-size:14px; color:#2c3e50;">
 
@@ -19,19 +19,25 @@
             <p style="margin:0; font-size:22px; font-weight:700; color:#ffffff; letter-spacing:2px;">SIMDE SAS</p>
             <p style="margin:6px 0 0; font-size:11px; color:rgba(255,255,255,0.75); letter-spacing:1px;">SOPORTE IMPLEMENTACION Y DESARROLLO</p>
             <div style="margin-top:18px; display:inline-block; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:8px 22px;">
-              <p style="margin:0; font-size:11px; color:rgba(255,255,255,0.85); letter-spacing:1px;">SOLICITUD DE FIRMA · ORDEN DE SERVICIO</p>
+              <p style="margin:0; font-size:11px; color:rgba(255,255,255,0.85); letter-spacing:1px;">ORDEN DE SERVICIO</p>
               <p style="margin:4px 0 0; font-size:20px; font-weight:700; color:#ffffff;">{{ $doc['numero_orden'] }}</p>
             </div>
           </td>
         </tr>
 
-        {{-- ── SALUDO ── --}}
+        {{-- ── MENSAJE ── --}}
         <tr>
           <td style="padding:32px 40px 0;">
             <p style="margin:0; font-size:16px; font-weight:600; color:#1a5276;">Estimado/a {{ $doc['cliente']['nombre'] }},</p>
             <p style="margin:12px 0 0; line-height:1.7; color:#444;">
-              Le solicitamos revisar y firmar digitalmente la orden de servicio <strong>{{ $doc['numero_orden'] }}</strong>,
-              cuyo detalle encontrará en el PDF adjunto. La firma se realiza en línea, en pocos pasos, desde el botón de este correo.
+              Hemos recibido la firma de la orden de servicio <strong>{{ $doc['numero_orden'] }}</strong>
+              @if($doc['firma'] && $doc['firma']['nombre'])
+                por parte de <strong>{{ $doc['firma']['nombre'] }}</strong>
+              @endif
+              @if($doc['firma'] && $doc['firma']['fecha'])
+                el {{ \Carbon\Carbon::parse($doc['firma']['fecha'])->setTimezone('America/Bogota')->format('d/m/Y \a \l\a\s H:i') }}.
+              @endif
+              Adjuntamos una copia firmada en formato PDF.
             </p>
           </td>
         </tr>
@@ -60,32 +66,11 @@
           </td>
         </tr>
 
-        {{-- ── BOTÓN DE FIRMA ── --}}
-        <tr>
-          <td style="padding:24px 40px 0;">
-            <div style="background:#f0f8ff; border:1px solid #aed6f1; border-radius:6px; padding:20px 18px; text-align:center;">
-              <p style="margin:0 0 14px; font-size:13px; color:#1a5276; line-height:1.6;">
-                Puede revisar la orden y <strong>firmarla</strong> directamente en línea:
-              </p>
-              <a href="{{ $link }}"
-                 style="display:inline-block; background:#1a8a6a; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; padding:12px 28px; border-radius:6px;">
-                Revisar y firmar orden de servicio
-              </a>
-              <p style="margin:12px 0 0; font-size:11px; color:#888;">
-                El enlace estará disponible hasta el {{ $expiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
-              </p>
-              <p style="margin:10px 0 0; font-size:11px; color:#888; word-break:break-all;">
-                Si el botón no funciona, copie este enlace en su navegador:<br>{{ $link }}
-              </p>
-            </div>
-          </td>
-        </tr>
-
         <tr>
           <td style="padding:24px 40px 0;">
             <div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:6px; padding:14px 18px; text-align:center;">
               <p style="margin:0; font-size:13px; color:#196f3d;">
-                📎 &nbsp;Se adjunta la orden de servicio en formato <strong>PDF</strong> para su revisión.
+                📎 &nbsp;Se adjunta la orden de servicio firmada en formato <strong>PDF</strong>.
               </p>
             </div>
           </td>
@@ -95,7 +80,7 @@
         <tr>
           <td style="padding:28px 40px;">
             <p style="margin:0; font-size:14px; line-height:1.7; color:#444;">
-              Si tiene alguna duda sobre el contenido de la orden, puede responder directamente a este correo antes de firmar.
+              Gracias por confiar en nosotros. Ante cualquier consulta puede responder directamente a este correo.
             </p>
             <p style="margin:18px 0 0; font-size:14px; color:#2c3e50;">
               Cordialmente,<br>
