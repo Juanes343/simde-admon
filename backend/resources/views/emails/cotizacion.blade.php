@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
     <title>Cotización {{ $cotizacion->numero_cotizacion }} — SIMDE SAS</title>
 </head>
 <body style="margin:0; padding:0; background:#f0f4f8; font-family: Arial, Helvetica, sans-serif; font-size:14px; color:#2c3e50;">
@@ -207,24 +209,38 @@
         {{-- ── APROBACIÓN EN LÍNEA ── --}}
         @if(!empty($enlaceAprobacion))
         <tr>
-          <td style="padding:24px 40px 0;">
-            <div style="background:#f0f8ff; border:1px solid #aed6f1; border-radius:6px; padding:20px 18px; text-align:center;">
-              <p style="margin:0 0 14px; font-size:13px; color:#1a5276; line-height:1.6;">
-                Puede revisar esta cotización y <strong>aprobarla con su firma</strong> directamente en línea:
-              </p>
-              <a href="{{ $enlaceAprobacion }}"
-                 style="display:inline-block; background:#1a8a6a; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; padding:12px 28px; border-radius:6px;">
-                Revisar y aprobar cotización
-              </a>
-              @if(!empty($enlaceExpiraEn))
-              <p style="margin:12px 0 0; font-size:11px; color:#888;">
-                El enlace estará disponible hasta el {{ $enlaceExpiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
-              </p>
-              @endif
-              <p style="margin:10px 0 0; font-size:11px; color:#888; word-break:break-all;">
-                Si el botón no funciona, copie este enlace en su navegador:<br>{{ $enlaceAprobacion }}
-              </p>
-            </div>
+          <td style="padding:28px 40px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:12px;">
+              <tr>
+                <td style="padding:32px 28px; text-align:center;">
+                  <p style="margin:0 0 6px; font-size:17px; font-weight:700; color:#14532d;">
+                    &check; Apruebe y firme su cotización
+                  </p>
+                  <p style="margin:0 0 22px; font-size:13px; color:#3a6b52; line-height:1.6;">
+                    Revísela en línea y confírmela con su firma en pocos pasos.
+                  </p>
+                  <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                    <tr>
+                      <td bgcolor="#1a8a6a" style="background-color:#1a8a6a; border-radius:8px;">
+                        <a href="{{ $enlaceAprobacion }}" target="_blank"
+                           style="display:inline-block; padding:17px 46px; font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; color:#ffffff !important; text-decoration:none; border-radius:8px;">
+                          Revisar y aprobar cotización &nbsp;&rarr;
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  @if(!empty($enlaceExpiraEn))
+                  <p style="margin:20px 0 0; font-size:11px; color:#5a8a70;">
+                    El enlace estará disponible hasta el {{ $enlaceExpiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
+                  </p>
+                  @endif
+                  <p style="margin:10px 0 0; font-size:10px; color:#7a9a8a; word-break:break-all;">
+                    Si el botón no funciona, copie este enlace en su navegador:<br>
+                    <a href="{{ $enlaceAprobacion }}" style="color:#3a6b52;">{{ $enlaceAprobacion }}</a>
+                  </p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
         @endif
@@ -261,9 +277,11 @@
 
         {{-- ── FOOTER ── --}}
         <tr>
-          <td style="background:#1a5276; padding:16px 40px; text-align:center;">
-            <p style="margin:0; font-size:10px; color:rgba(255,255,255,0.6); line-height:1.6;">
-              <strong style="color:rgba(255,255,255,0.9);">SIMDE SAS</strong> · simdeinfo@gmail.com<br>
+          <td style="background:#f8fafc; padding:22px 40px; text-align:center; border-top:1px solid #e2e8f0;">
+            <p style="margin:0 0 6px; font-size:12px; font-weight:700; color:#1a5276; letter-spacing:0.5px;">
+              SIMDE SAS &nbsp;·&nbsp; <a href="mailto:simdeinfo@gmail.com" style="color:#1a5276; text-decoration:none;">simdeinfo@gmail.com</a>
+            </p>
+            <p style="margin:0; font-size:10px; color:#94a3b8; line-height:1.7;">
               Este mensaje y sus adjuntos son de carácter confidencial y están dirigidos únicamente al destinatario indicado.<br>
               Generado automáticamente el {{ \Carbon\Carbon::now()->setTimezone('America/Bogota')->format('d/m/Y H:i') }} (hora Colombia)
             </p>

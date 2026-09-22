@@ -379,8 +379,8 @@ class CotizacionController extends Controller
      * y, opcionalmente, documentos adicionales (multipart: adjuntos[]).
      *
      * Si la cotización está en borrador/enviada, el correo lleva un botón para que el cliente
-     * la apruebe y firme en línea. Para ello se reciben los datos con los que se creará la
-     * orden de servicio (datos_orden[...]) y se genera un enlace con token y vigencia.
+     * la apruebe y firme en línea (enlace con token y vigencia). Al aprobar se crea la orden de
+     * servicio sin fechas ni condiciones: quien la edita después las completa.
      */
     public function enviarEmail(Request $request, $id)
     {
@@ -395,30 +395,14 @@ class CotizacionController extends Controller
         $rules = [
             'email'       => 'required|email',
             'adjuntos'    => 'nullable|array|max:5',
-            'adjuntos.*'  => 'file|max:10240|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx,csv,txt,jpg,jpeg,png,zip',
+            'adjuntos.*'  => 'file|max:10240|mimes:pdf',
         ];
-
-        if ($conAprobacion) {
-            $rules += [
-                'datos_orden'                          => 'required|array',
-                'datos_orden.fecha_inicio'             => 'required|date',
-                'datos_orden.fecha_fin'                => 'required|date|after_or_equal:datos_orden.fecha_inicio',
-                'datos_orden.periodo_facturacion_dias' => 'nullable|integer|min:1',
-                'datos_orden.sw_prorroga_automatica'   => 'nullable|in:0,1',
-                'datos_orden.porcentaje_soltec'        => 'nullable|numeric|min:0|max:100',
-                'datos_orden.porcentaje_ret_fuente'    => 'nullable|numeric|min:0|max:100',
-            ];
-        }
 
         $validator = Validator::make($request->all(), $rules, [
             'adjuntos.max'   => 'Puede adjuntar máximo 5 documentos.',
             'adjuntos.*.max' => 'Cada documento adjunto debe pesar máximo 10 MB.',
-            'adjuntos.*.mimes' => 'Tipo de archivo no permitido. Use PDF, Word, Excel, PowerPoint, CSV, TXT, imágenes o ZIP.',
+            'adjuntos.*.mimes' => 'Solo se admiten documentos en formato PDF.',
             'adjuntos.*.uploaded' => 'No se pudo subir uno de los adjuntos (revise que no supere el límite del servidor).',
-            'datos_orden.required'                    => 'Indique los datos de la orden de servicio que se creará al aprobar.',
-            'datos_orden.fecha_inicio.required'       => 'La fecha de inicio de la orden es requerida.',
-            'datos_orden.fecha_fin.required'          => 'La fecha de fin de la orden es requerida.',
-            'datos_orden.fecha_fin.after_or_equal'    => 'La fecha de fin de la orden no puede ser anterior a la de inicio.',
         ]);
 
         if ($validator->fails()) {
@@ -449,19 +433,10 @@ class CotizacionController extends Controller
             $enlaceAprobacion = null;
             if ($conAprobacion) {
                 $token = Str::random(64);
-                $d     = $request->input('datos_orden');
 
                 $cotizacion->update([
                     'token_aprobacion'           => hash('sha256', $token),
                     'token_aprobacion_expira_en' => $enlaceExpiraEn,
-                    'datos_orden'                => [
-                        'fecha_inicio'             => $d['fecha_inicio'],
-                        'fecha_fin'                => $d['fecha_fin'],
-                        'periodo_facturacion_dias' => (int) ($d['periodo_facturacion_dias'] ?? 30),
-                        'sw_prorroga_automatica'   => (string) ($d['sw_prorroga_automatica'] ?? '0'),
-                        'porcentaje_soltec'        => (float) ($d['porcentaje_soltec'] ?? 0),
-                        'porcentaje_ret_fuente'    => (float) ($d['porcentaje_ret_fuente'] ?? 0),
-                    ],
                 ]);
 
                 $enlaceAprobacion = $this->urlFrontend($request) . "/#/aprobar-cotizacion/{$cotizacion->cotizacion_id}/{$token}";

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Container, Card, Alert, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import CotizacionAprobacionView from '../../Cotizaciones/views/CotizacionAprobacionView';
+import CerrarPestanaButton from '../../../components/Common/CerrarPestanaButton';
 import ordenServicioService from '../services/ordenServicioService';
 
 /**
@@ -93,6 +94,9 @@ const OrdenServicioSignaturePage = () => {
               Registramos su firma en la orden de servicio {numeroOrden && <strong>{numeroOrden}</strong>} y le enviamos
               una copia firmada en PDF a su correo.
             </Card.Text>
+            <div className="mt-4">
+              <CerrarPestanaButton />
+            </div>
           </Card.Body>
         </Card>
       </Container>

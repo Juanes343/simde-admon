@@ -47,6 +47,10 @@
                 </td>
               </tr>
               <tr>
+                <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Teléfono / celular</td>
+                <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">{{ $cotizacion->firmante_telefono ?? '—' }}</td>
+              </tr>
+              <tr>
                 <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Fecha de firma</td>
                 <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">
                   {{ $cotizacion->fecha_firma ? $cotizacion->fecha_firma->setTimezone('America/Bogota')->format('d/m/Y H:i') : '—' }}
@@ -60,8 +64,12 @@
               <tr>
                 <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Vigencia</td>
                 <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">
-                  {{ $orden->fecha_inicio->format('d/m/Y') }} — {{ $orden->fecha_fin->format('d/m/Y') }}
-                  ({{ $orden->sw_prorroga_automatica == '1' ? 'con prórroga automática' : 'sin prórroga' }})
+                  @if($orden->fecha_inicio && $orden->fecha_fin)
+                    {{ $orden->fecha_inicio->format('d/m/Y') }} — {{ $orden->fecha_fin->format('d/m/Y') }}
+                    ({{ $orden->sw_prorroga_automatica == '1' ? 'con prórroga automática' : 'sin prórroga' }})
+                  @else
+                    Por definir (se completa al editar la orden de servicio)
+                  @endif
                 </td>
               </tr>
               <tr>

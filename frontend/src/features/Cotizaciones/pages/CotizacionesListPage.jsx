@@ -136,10 +136,10 @@ const CotizacionesListPage = () => {
     setShowEmailModal(true);
   };
 
-  const handleEmailConfirm = async (email, adjuntos, datosOrden) => {
+  const handleEmailConfirm = async (email, adjuntos) => {
     try {
       setLoadingEmail(true);
-      const res = await cotizacionService.enviarEmail(cotizacionEmail.cotizacion_id, email, adjuntos, datosOrden);
+      const res = await cotizacionService.enviarEmail(cotizacionEmail.cotizacion_id, email, adjuntos);
       toast.success(res.message);
       setShowEmailModal(false);
       refetch();
@@ -371,7 +371,6 @@ const CotizacionesListPage = () => {
         numeroCotizacion={cotizacionEmail?.numero_cotizacion}
         emailInicial={cotizacionEmail?.tercero?.email}
         conAprobacion={['borrador', 'enviada'].includes(cotizacionEmail?.sw_estado)}
-        datosOrdenInicial={cotizacionEmail?.datos_orden}
         loading={loadingEmail}
         onConfirm={handleEmailConfirm}
       />

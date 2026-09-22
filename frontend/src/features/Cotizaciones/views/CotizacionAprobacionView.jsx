@@ -37,6 +37,7 @@ const CotizacionAprobacionView = ({
 }) => {
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [showRechazo, setShowRechazo] = useState(false);
   const [motivo, setMotivo] = useState('');
 
@@ -54,12 +55,12 @@ const CotizacionAprobacionView = ({
   const limpiarFirma = () => sigCanvas.current?.clear();
 
   // Datos del encabezado: una orden de servicio trae su vigencia; una cotización, su fecha de emisión
-  const esOrden = Boolean(data.fecha_inicio);
+  const esOrden = data.tipo === 'orden';
   const campos = [
     ...(esOrden
       ? [
-          { label: 'Fecha Inicio', value: formatDate(data.fecha_inicio) },
-          { label: 'Fecha Fin', value: formatDate(data.fecha_fin) },
+          { label: 'Fecha Inicio', value: data.fecha_inicio ? formatDate(data.fecha_inicio) : 'Por definir' },
+          { label: 'Fecha Fin', value: data.fecha_fin ? formatDate(data.fecha_fin) : 'Por definir' },
           { label: 'Período de Facturación', value: `Cada ${data.periodo_dias} días` },
           { label: 'Prórroga Automática', value: data.prorroga ? 'Sí' : 'No' },
         ]
@@ -72,6 +73,10 @@ const CotizacionAprobacionView = ({
   const handleAprobar = () => {
     if (!nombre.trim()) { toast.warning('Ingrese su nombre completo.'); return; }
     if (!documento.trim()) { toast.warning('Ingrese su número de documento.'); return; }
+    if (!/^[0-9+()\-\s]{7,30}$/.test(telefono.trim())) {
+      toast.warning('Ingrese un celular o teléfono válido.');
+      return;
+    }
     if (!sigCanvas.current || sigCanvas.current.isEmpty()) {
       toast.warning('Por favor firme en el recuadro antes de aprobar.');
       return;
@@ -80,6 +85,7 @@ const CotizacionAprobacionView = ({
     onAprobar({
       nombre: nombre.trim(),
       documento: documento.trim(),
+      telefono: telefono.trim(),
       firma: sigCanvas.current.getTrimmedCanvas().toDataURL('image/png'),
     });
   };
@@ -204,7 +210,7 @@ const CotizacionAprobacionView = ({
             </Card.Header>
             <Card.Body>
               <Row className="g-3 mb-3">
-                <Col md={7}>
+                <Col md={6}>
                   <Form.Label className="fw-bold">Nombre completo <span className="text-danger">*</span></Form.Label>
                   <Form.Control
                     type="text"
@@ -214,13 +220,25 @@ const CotizacionAprobacionView = ({
                     disabled={enviando}
                   />
                 </Col>
-                <Col md={5}>
+                <Col md={3}>
                   <Form.Label className="fw-bold">Documento de identidad <span className="text-danger">*</span></Form.Label>
                   <Form.Control
                     type="text"
                     maxLength={50}
                     value={documento}
                     onChange={(e) => setDocumento(e.target.value)}
+                    disabled={enviando}
+                  />
+                </Col>
+                <Col md={3}>
+                  <Form.Label className="fw-bold">Celular o teléfono <span className="text-danger">*</span></Form.Label>
+                  <Form.Control
+                    type="tel"
+                    inputMode="tel"
+                    maxLength={30}
+                    placeholder="Ej: 3001234567"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
                     disabled={enviando}
                   />
                 </Col>

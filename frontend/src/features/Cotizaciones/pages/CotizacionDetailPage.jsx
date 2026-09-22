@@ -49,10 +49,10 @@ const CotizacionDetailPage = () => {
 
   const handleEnviarEmail = () => setShowEmailModal(true);
 
-  const handleEmailConfirm = async (email, adjuntos, datosOrden) => {
+  const handleEmailConfirm = async (email, adjuntos) => {
     try {
       setLoadingEmail(true);
-      const res = await cotizacionService.enviarEmail(id, email, adjuntos, datosOrden);
+      const res = await cotizacionService.enviarEmail(id, email, adjuntos);
       toast.success(res.message);
       setShowEmailModal(false);
       loadCotizacion();
@@ -301,7 +301,6 @@ const CotizacionDetailPage = () => {
         numeroCotizacion={cotizacion?.numero_cotizacion}
         emailInicial={cotizacion?.tercero?.email}
         conAprobacion={['borrador', 'enviada'].includes(cotizacion?.sw_estado)}
-        datosOrdenInicial={cotizacion?.datos_orden}
         loading={loadingEmail}
         onConfirm={handleEmailConfirm}
       />

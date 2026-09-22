@@ -55,19 +55,10 @@ const cotizacionService = {
   },
 
   // `adjuntos`: File[] opcionales que se envían junto al PDF de la cotización.
-  // `datosOrden`: datos de la orden de servicio que se crea si el cliente aprueba desde el correo
-  // (obligatorio cuando la cotización está en borrador/enviada).
-  enviarEmail: async (id, email, adjuntos = [], datosOrden = null) => {
+  enviarEmail: async (id, email, adjuntos = []) => {
     const formData = new FormData();
     formData.append('email', email);
     adjuntos.forEach((archivo) => formData.append('adjuntos[]', archivo));
-    if (datosOrden) {
-      Object.entries(datosOrden).forEach(([campo, valor]) => {
-        if (valor !== '' && valor !== null && valor !== undefined) {
-          formData.append(`datos_orden[${campo}]`, valor);
-        }
-      });
-    }
 
     const response = await api.post(`/cotizaciones/${id}/enviar-email`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

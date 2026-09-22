@@ -173,6 +173,7 @@ class OrdenServicioPdfService
             'fecha'     => $fecha,
             'nombre'    => $orden->firmante_nombre ?: $cotizacion?->firmante_nombre,
             'documento' => $orden->firmante_documento ?: $cotizacion?->firmante_documento,
+            'telefono'  => $orden->firmante_telefono ?: $cotizacion?->firmante_telefono,
             'ip'        => $orden->firma_ip ?: $cotizacion?->firma_ip,
         ];
     }

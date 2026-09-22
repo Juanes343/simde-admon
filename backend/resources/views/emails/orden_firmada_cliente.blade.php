@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
     <title>Orden de servicio {{ $doc['numero_orden'] }} firmada — SIMDE SAS</title>
 </head>
 <body style="margin:0; padding:0; background:#f0f4f8; font-family: Arial, Helvetica, sans-serif; font-size:14px; color:#2c3e50;">
@@ -49,12 +51,12 @@
               <tr>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #2e86c1;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Inicio</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ ($doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') : 'Por definir') }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #e74c3c;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Fin</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ ($doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') : 'Por definir') }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="32%" style="background:#1a5276; border-radius:6px; padding:14px 16px; text-align:center;">
@@ -90,9 +92,9 @@
         </tr>
 
         <tr>
-          <td style="background:#1a5276; padding:16px 40px; text-align:center;">
-            <p style="margin:0; font-size:10px; color:rgba(255,255,255,0.6); line-height:1.6;">
-              <strong style="color:rgba(255,255,255,0.9);">SIMDE SAS</strong><br>
+          <td style="background:#f8fafc; padding:22px 40px; text-align:center; border-top:1px solid #e2e8f0;">
+            <p style="margin:0 0 6px; font-size:12px; font-weight:700; color:#1a5276; letter-spacing:0.5px;">SIMDE SAS</p>
+            <p style="margin:0; font-size:10px; color:#94a3b8; line-height:1.7;">
               Este mensaje y sus adjuntos son de carácter confidencial y están dirigidos únicamente al destinatario indicado.
             </p>
           </td>

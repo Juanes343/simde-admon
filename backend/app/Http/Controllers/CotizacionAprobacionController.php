@@ -56,6 +56,7 @@ class CotizacionAprobacionController extends Controller
         });
 
         return response()->json([
+            'tipo'              => 'cotizacion',
             'numero_cotizacion' => $cotizacion->numero_cotizacion,
             'cliente'           => $cotizacion->tercero?->nombre_tercero ?? $cotizacion->tercero_id,
             'fecha_emision'     => $cotizacion->fecha_emision?->format('Y-m-d'),
@@ -83,10 +84,13 @@ class CotizacionAprobacionController extends Controller
         $validator = Validator::make($request->all(), [
             'nombre'    => 'required|string|max:150',
             'documento' => 'required|string|max:50',
+            'telefono'  => ['required', 'string', 'max:30', 'regex:/^[0-9+()\-\s]{7,30}$/'],
             'firma'     => 'required|string|max:700000',
         ], [
             'nombre.required'    => 'Ingrese su nombre completo.',
             'documento.required' => 'Ingrese su número de documento.',
+            'telefono.required'  => 'Ingrese su celular o teléfono de contacto.',
+            'telefono.regex'     => 'Ingrese un celular o teléfono válido (solo números, +, -, paréntesis y espacios).',
             'firma.required'     => 'Por favor firme en el recuadro antes de aprobar.',
             'firma.max'          => 'La imagen de la firma es demasiado grande.',
         ]);
@@ -113,23 +117,18 @@ class CotizacionAprobacionController extends Controller
                     return ['error' => $error];
                 }
 
-                $datosOrden = $cotizacion->datos_orden;
-                if (empty($datosOrden['fecha_inicio']) || empty($datosOrden['fecha_fin'])) {
-                    return ['error' => response()->json([
-                        'message' => 'Esta cotización no tiene los datos para generar la orden de servicio. Comuníquese con SIMDE.',
-                    ], 422)];
-                }
-
                 $cotizacion->update([
                     'sw_estado'          => 'aprobada',
                     'firma_cliente'      => $firma,
                     'firmante_nombre'    => trim($request->input('nombre')),
                     'firmante_documento' => trim($request->input('documento')),
+                    'firmante_telefono'  => trim($request->input('telefono')),
                     'firma_ip'           => $request->ip(),
                     'fecha_firma'        => now(),
                 ]);
 
-                $orden = $servicioOrden->crearOrden($cotizacion, $datosOrden, (int) $cotizacion->usuario_id);
+                // La orden se crea sin fechas ni condiciones: quien la edita después las completa
+                $orden = $servicioOrden->crearOrden($cotizacion, [], (int) $cotizacion->usuario_id);
 
                 // La orden hereda la firma: así figura como firmada (no se vuelve a solicitar firma) y su PDF la lleva
                 $orden->update([
@@ -137,6 +136,7 @@ class CotizacionAprobacionController extends Controller
                     'fecha_firma'        => $cotizacion->fecha_firma,
                     'firmante_nombre'    => $cotizacion->firmante_nombre,
                     'firmante_documento' => $cotizacion->firmante_documento,
+                    'firmante_telefono'  => $cotizacion->firmante_telefono,
                     'firma_ip'           => $cotizacion->firma_ip,
                 ]);
 

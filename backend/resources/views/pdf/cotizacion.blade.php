@@ -441,6 +441,12 @@
                         <td class="cond-label">Documento:</td>
                         <td>{{ $cotizacion->firmante_documento ?? '—' }}</td>
                     </tr>
+                    @if($cotizacion->firmante_telefono)
+                    <tr>
+                        <td class="cond-label">Teléfono:</td>
+                        <td>{{ $cotizacion->firmante_telefono }}</td>
+                    </tr>
+                    @endif
                     <tr>
                         <td class="cond-label">Fecha de firma:</td>
                         <td>{{ $cotizacion->fecha_firma->setTimezone('America/Bogota')->format('d/m/Y H:i') }}</td>

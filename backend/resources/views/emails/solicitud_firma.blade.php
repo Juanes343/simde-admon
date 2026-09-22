@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
     <title>Solicitud de firma — Orden de servicio {{ $doc['numero_orden'] }}</title>
 </head>
 <body style="margin:0; padding:0; background:#f0f4f8; font-family: Arial, Helvetica, sans-serif; font-size:14px; color:#2c3e50;">
@@ -43,12 +45,12 @@
               <tr>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #2e86c1;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Inicio</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ ($doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') : 'Por definir') }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #e74c3c;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Fin</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ ($doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') : 'Por definir') }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="32%" style="background:#1a5276; border-radius:6px; padding:14px 16px; text-align:center;">
@@ -62,22 +64,36 @@
 
         {{-- ── BOTÓN DE FIRMA ── --}}
         <tr>
-          <td style="padding:24px 40px 0;">
-            <div style="background:#f0f8ff; border:1px solid #aed6f1; border-radius:6px; padding:20px 18px; text-align:center;">
-              <p style="margin:0 0 14px; font-size:13px; color:#1a5276; line-height:1.6;">
-                Puede revisar la orden y <strong>firmarla</strong> directamente en línea:
-              </p>
-              <a href="{{ $link }}"
-                 style="display:inline-block; background:#1a8a6a; color:#ffffff; font-size:14px; font-weight:700; text-decoration:none; padding:12px 28px; border-radius:6px;">
-                Revisar y firmar orden de servicio
-              </a>
-              <p style="margin:12px 0 0; font-size:11px; color:#888;">
-                El enlace estará disponible hasta el {{ $expiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
-              </p>
-              <p style="margin:10px 0 0; font-size:11px; color:#888; word-break:break-all;">
-                Si el botón no funciona, copie este enlace en su navegador:<br>{{ $link }}
-              </p>
-            </div>
+          <td style="padding:28px 40px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:12px;">
+              <tr>
+                <td style="padding:32px 28px; text-align:center;">
+                  <p style="margin:0 0 6px; font-size:17px; font-weight:700; color:#14532d;">
+                    &check; Firme su orden de servicio
+                  </p>
+                  <p style="margin:0 0 22px; font-size:13px; color:#3a6b52; line-height:1.6;">
+                    Revísela en línea y fírmela en pocos pasos.
+                  </p>
+                  <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                    <tr>
+                      <td bgcolor="#1a8a6a" style="background-color:#1a8a6a; border-radius:8px;">
+                        <a href="{{ $link }}" target="_blank"
+                           style="display:inline-block; padding:17px 46px; font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; color:#ffffff !important; text-decoration:none; border-radius:8px;">
+                          Revisar y firmar orden &nbsp;&rarr;
+                        </a>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="margin:20px 0 0; font-size:11px; color:#5a8a70;">
+                    El enlace estará disponible hasta el {{ $expiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
+                  </p>
+                  <p style="margin:10px 0 0; font-size:10px; color:#7a9a8a; word-break:break-all;">
+                    Si el botón no funciona, copie este enlace en su navegador:<br>
+                    <a href="{{ $link }}" style="color:#3a6b52;">{{ $link }}</a>
+                  </p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
 
@@ -105,9 +121,9 @@
         </tr>
 
         <tr>
-          <td style="background:#1a5276; padding:16px 40px; text-align:center;">
-            <p style="margin:0; font-size:10px; color:rgba(255,255,255,0.6); line-height:1.6;">
-              <strong style="color:rgba(255,255,255,0.9);">SIMDE SAS</strong><br>
+          <td style="background:#f8fafc; padding:22px 40px; text-align:center; border-top:1px solid #e2e8f0;">
+            <p style="margin:0 0 6px; font-size:12px; font-weight:700; color:#1a5276; letter-spacing:0.5px;">SIMDE SAS</p>
+            <p style="margin:0; font-size:10px; color:#94a3b8; line-height:1.7;">
               Este mensaje y sus adjuntos son de carácter confidencial y están dirigidos únicamente al destinatario indicado.
             </p>
           </td>

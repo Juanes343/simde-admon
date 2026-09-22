@@ -65,6 +65,7 @@ class OrdenServicio extends Model
         'fecha_firma',
         'firmante_nombre',
         'firmante_documento',
+        'firmante_telefono',
         'firma_ip',
     ];
 
@@ -139,6 +140,11 @@ class OrdenServicio extends Model
         
         // Si está inactiva, no permite facturar
         if ($this->sw_estado !== '1') {
+            return false;
+        }
+
+        // Una orden sin fechas (creada al aprobar una cotización) aún no está lista para facturar
+        if (! $this->fecha_inicio || ! $this->fecha_fin) {
             return false;
         }
 

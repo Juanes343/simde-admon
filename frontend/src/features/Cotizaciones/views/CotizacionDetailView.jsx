@@ -100,6 +100,7 @@ const CotizacionDetailView = ({ cotizacion, onDescargarPdf, onEnviarEmail }) => 
                   <i className="fas fa-file-signature text-success me-1"></i>
                   {cotizacion.firmante_nombre}
                   {cotizacion.firmante_documento && <span className="text-muted"> (Doc. {cotizacion.firmante_documento})</span>}
+                  {cotizacion.firmante_telefono && <span className="text-muted"> · Tel. {cotizacion.firmante_telefono}</span>}
                   <span className="text-muted small ms-2">{formatDateTime(cotizacion.fecha_firma)}</span>
                 </p>
               </Col>

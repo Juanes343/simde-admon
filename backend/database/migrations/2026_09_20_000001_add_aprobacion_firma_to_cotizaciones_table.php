@@ -13,12 +13,8 @@ return new class extends Migration
             $table->string('token_aprobacion', 64)->nullable()->unique()->after('orden_servicio_id');
             $table->dateTime('token_aprobacion_expira_en')->nullable()->after('token_aprobacion');
 
-            // Datos con los que se crea la orden de servicio cuando el cliente aprueba
-            $table->json('datos_orden')->nullable()->after('token_aprobacion_expira_en')
-                  ->comment('fecha_inicio, fecha_fin, periodo_facturacion_dias, sw_prorroga_automatica, porcentaje_soltec, porcentaje_ret_fuente');
-
             // Aprobación y firma del cliente
-            $table->text('firma_cliente')->nullable()->after('datos_orden')->comment('Imagen de la firma en base64');
+            $table->text('firma_cliente')->nullable()->after('token_aprobacion_expira_en')->comment('Imagen de la firma en base64');
             $table->string('firmante_nombre', 150)->nullable()->after('firma_cliente');
             $table->string('firmante_documento', 50)->nullable()->after('firmante_nombre');
             $table->string('firma_ip', 45)->nullable()->after('firmante_documento');
@@ -36,7 +32,6 @@ return new class extends Migration
             $table->dropColumn([
                 'token_aprobacion',
                 'token_aprobacion_expira_en',
-                'datos_orden',
                 'firma_cliente',
                 'firmante_nombre',
                 'firmante_documento',

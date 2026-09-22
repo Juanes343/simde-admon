@@ -19,8 +19,9 @@ class CotizacionOrdenService
      * Crea la orden de servicio (con sus ítems) a partir de una cotización y la marca como convertida.
      * No abre transacción: quien la llama debe hacerlo.
      *
-     * @param array $datos fecha_inicio, fecha_fin y, opcionalmente, periodo_facturacion_dias,
-     *                     sw_prorroga_automatica, porcentaje_soltec, porcentaje_ret_fuente
+     * @param array $datos fecha_inicio, fecha_fin, periodo_facturacion_dias, sw_prorroga_automatica,
+     *                     porcentaje_soltec y porcentaje_ret_fuente. Todos opcionales: sin fechas la orden queda
+     *                     "por completar" (se editan después) y el resto toma los valores por defecto.
      */
     public function crearOrden(Cotizacion $cotizacion, array $datos, int $usuarioId): OrdenServicio
     {
@@ -28,8 +29,8 @@ class CotizacionOrdenService
             'numero_orden'             => OrdenServicio::generarNumeroOrden(),
             'tipo_id_tercero'          => $cotizacion->tipo_id_tercero,
             'tercero_id'               => $cotizacion->tercero_id,
-            'fecha_inicio'             => $datos['fecha_inicio'],
-            'fecha_fin'                => $datos['fecha_fin'],
+            'fecha_inicio'             => $datos['fecha_inicio'] ?? null,
+            'fecha_fin'                => $datos['fecha_fin'] ?? null,
             'sw_prorroga_automatica'   => $datos['sw_prorroga_automatica'] ?? '0',
             'periodo_facturacion_dias' => $datos['periodo_facturacion_dias'] ?? 30,
             'porcentaje_soltec'        => $datos['porcentaje_soltec'] ?? 0,

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Container, Card, Alert, Spinner } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 import CotizacionAprobacionView from '../views/CotizacionAprobacionView';
+import CerrarPestanaButton from '../../../components/Common/CerrarPestanaButton';
 import cotizacionService from '../services/cotizacionService';
 
 /**
@@ -108,6 +109,9 @@ const CotizacionAprobacionPage = () => {
               Registramos su aprobación y firma. Se generó la orden de servicio
               {numeroOrden && <> <strong>{numeroOrden}</strong></>} y le enviamos una copia en PDF a su correo.
             </Card.Text>
+            <div className="mt-4">
+              <CerrarPestanaButton />
+            </div>
           </Card.Body>
         </Card>
       </Container>
@@ -124,6 +128,9 @@ const CotizacionAprobacionPage = () => {
             <Card.Text className="mt-3">
               Hemos registrado que la cotización no fue aprobada. Gracias por su respuesta.
             </Card.Text>
+            <div className="mt-4">
+              <CerrarPestanaButton />
+            </div>
           </Card.Body>
         </Card>
       </Container>

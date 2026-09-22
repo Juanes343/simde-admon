@@ -93,10 +93,12 @@ class FirmaDigitalController extends Controller
         $doc = $pdfService->datos($orden);
 
         return response()->json([
+            'tipo'             => 'orden',
             'numero_documento' => $doc['numero_orden'],
             'cliente'          => $doc['cliente']['nombre'],
-            'fecha_inicio'     => \Carbon\Carbon::parse($doc['fecha_inicio'])->format('Y-m-d'),
-            'fecha_fin'        => \Carbon\Carbon::parse($doc['fecha_fin'])->format('Y-m-d'),
+            // Una orden creada al aprobar una cotización puede no tener fechas todavía
+            'fecha_inicio'     => $doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('Y-m-d') : null,
+            'fecha_fin'        => $doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('Y-m-d') : null,
             'periodo_dias'     => $doc['periodo_dias'],
             'prorroga'         => $doc['prorroga'],
             'metodo_pago'      => $doc['metodo_pago'],
@@ -132,10 +134,13 @@ class FirmaDigitalController extends Controller
         $validator = Validator::make($request->all(), [
             'nombre'    => 'required|string|max:150',
             'documento' => 'required|string|max:50',
+            'telefono'  => ['required', 'string', 'max:30', 'regex:/^[0-9+()\-\s]{7,30}$/'],
             'firma'     => 'required|string|max:700000',
         ], [
             'nombre.required'    => 'Ingrese su nombre completo.',
             'documento.required' => 'Ingrese su número de documento.',
+            'telefono.required'  => 'Ingrese su celular o teléfono de contacto.',
+            'telefono.regex'     => 'Ingrese un celular o teléfono válido (solo números, +, -, paréntesis y espacios).',
             'firma.required'     => 'Por favor firme en el recuadro antes de continuar.',
             'firma.max'          => 'La imagen de la firma es demasiado grande.',
         ]);
@@ -166,6 +171,7 @@ class FirmaDigitalController extends Controller
                     'fecha_firma'        => now(),
                     'firmante_nombre'    => trim($request->input('nombre')),
                     'firmante_documento' => trim($request->input('documento')),
+                    'firmante_telefono'  => trim($request->input('telefono')),
                     'firma_ip'           => $request->ip(),
                 ]);
 

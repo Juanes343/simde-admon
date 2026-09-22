@@ -1,19 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, Form, Button, ListGroup, Row, Col } from 'react-bootstrap';
+import { Modal, Form, Button, ListGroup } from 'react-bootstrap';
 import { toast } from 'react-toastify';
 
 export const MAX_ADJUNTOS = 5;
 export const MAX_MB_ADJUNTO = 10;
-const EXTENSIONES = '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.txt,.jpg,.jpeg,.png,.zip';
-
-const DATOS_ORDEN_VACIOS = {
-  fecha_inicio: '',
-  fecha_fin: '',
-  periodo_facturacion_dias: '30',
-  sw_prorroga_automatica: '0',
-  porcentaje_soltec: '0',
-  porcentaje_ret_fuente: '0',
-};
+const EXTENSIONES = '.pdf';
+const TIPO_PDF = 'application/pdf';
 
 const formatearTamano = (bytes) =>
   bytes >= 1024 * 1024
@@ -22,9 +14,8 @@ const formatearTamano = (bytes) =>
 
 /**
  * Modal para enviar una cotización por correo (PDF + documentos adicionales opcionales).
- * Cuando `conAprobacion` es true, el correo lleva un botón para que el cliente apruebe y firme,
- * y aquí se piden los datos de la orden de servicio que se creará al aprobar.
- * Maneja su propio estado de formulario; el envío lo resuelve el padre en `onConfirm(email, archivos, datosOrden)`.
+ * Cuando `conAprobacion` es true, el correo lleva un botón para que el cliente apruebe y firme en línea.
+ * Maneja su propio estado de formulario; el envío lo resuelve el padre en `onConfirm(email, archivos)`.
  */
 const EnviarEmailModal = ({
   show,
@@ -32,13 +23,11 @@ const EnviarEmailModal = ({
   numeroCotizacion,
   emailInicial,
   conAprobacion = false,
-  datosOrdenInicial = null,
   loading,
   onConfirm,
 }) => {
   const [email, setEmail] = useState('');
   const [archivos, setArchivos] = useState([]);
-  const [datosOrden, setDatosOrden] = useState(DATOS_ORDEN_VACIOS);
   const inputRef = useRef(null);
 
   // Cada vez que se abre, se reinicia el formulario
@@ -46,12 +35,8 @@ const EnviarEmailModal = ({
     if (show) {
       setEmail(emailInicial || '');
       setArchivos([]);
-      setDatosOrden({ ...DATOS_ORDEN_VACIOS, ...(datosOrdenInicial || {}) });
     }
-  }, [show, emailInicial, datosOrdenInicial]);
-
-  const handleDatosOrden = (campo) => (e) =>
-    setDatosOrden((prev) => ({ ...prev, [campo]: e.target.value }));
+  }, [show, emailInicial]);
 
   const handleSeleccionar = (e) => {
     const nuevos = Array.from(e.target.files || []);
@@ -59,6 +44,11 @@ const EnviarEmailModal = ({
 
     const validos = [];
     for (const archivo of nuevos) {
+      const esPdf = archivo.type === TIPO_PDF || archivo.name.toLowerCase().endsWith('.pdf');
+      if (!esPdf) {
+        toast.error(`"${archivo.name}" no es un PDF. Solo se admiten documentos PDF.`);
+        continue;
+      }
       if (archivo.size > MAX_MB_ADJUNTO * 1024 * 1024) {
         toast.error(`"${archivo.name}" supera los ${MAX_MB_ADJUNTO} MB`);
         continue;
@@ -77,23 +67,11 @@ const EnviarEmailModal = ({
 
   const handleEnviar = () => {
     if (!email) { toast.error('Ingrese un correo destinatario'); return; }
-
-    if (conAprobacion) {
-      if (!datosOrden.fecha_inicio || !datosOrden.fecha_fin) {
-        toast.error('Indique la fecha de inicio y fin de la orden de servicio');
-        return;
-      }
-      if (datosOrden.fecha_fin < datosOrden.fecha_inicio) {
-        toast.error('La fecha de fin de la orden no puede ser anterior a la de inicio');
-        return;
-      }
-    }
-
-    onConfirm(email, archivos, conAprobacion ? datosOrden : null);
+    onConfirm(email, archivos);
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered size={conAprobacion ? 'lg' : undefined}>
+    <Modal show={show} onHide={onHide} centered>
       <Modal.Header closeButton>
         <Modal.Title>
           <i className="fas fa-envelope me-2 text-dark"></i>Enviar Cotización por Correo
@@ -120,63 +98,15 @@ const EnviarEmailModal = ({
             <p className="fw-bold mb-1">
               <i className="fas fa-file-signature me-2 text-success"></i>Aprobación en línea
             </p>
-            <p className="text-muted small mb-3">
-              El correo incluirá un botón para que el cliente apruebe y firme la cotización. Al aprobar,
-              se crea automáticamente la orden de servicio con estos datos.
+            <p className="text-muted small mb-0">
+              El correo incluirá un botón para que el cliente apruebe y firme la cotización. Al aprobar, se crea
+              la orden de servicio; sus fechas y condiciones se completan después, al editarla.
             </p>
-            <Row className="g-3">
-              <Col md={6}>
-                <Form.Label className="fw-bold">Fecha Inicio <span className="text-danger">*</span></Form.Label>
-                <Form.Control type="date" value={datosOrden.fecha_inicio} onChange={handleDatosOrden('fecha_inicio')} />
-              </Col>
-              <Col md={6}>
-                <Form.Label className="fw-bold">Fecha Fin <span className="text-danger">*</span></Form.Label>
-                <Form.Control type="date" value={datosOrden.fecha_fin} onChange={handleDatosOrden('fecha_fin')} />
-              </Col>
-              <Col md={4}>
-                <Form.Label className="fw-bold">Período Facturación (días)</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="1"
-                  value={datosOrden.periodo_facturacion_dias}
-                  onChange={handleDatosOrden('periodo_facturacion_dias')}
-                />
-              </Col>
-              <Col md={4}>
-                <Form.Label className="fw-bold">% Soltec</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={datosOrden.porcentaje_soltec}
-                  onChange={handleDatosOrden('porcentaje_soltec')}
-                />
-              </Col>
-              <Col md={4}>
-                <Form.Label className="fw-bold">% Ret. Fuente</Form.Label>
-                <Form.Control
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  value={datosOrden.porcentaje_ret_fuente}
-                  onChange={handleDatosOrden('porcentaje_ret_fuente')}
-                />
-              </Col>
-              <Col md={4}>
-                <Form.Label className="fw-bold">Prórroga Automática</Form.Label>
-                <Form.Select value={datosOrden.sw_prorroga_automatica} onChange={handleDatosOrden('sw_prorroga_automatica')}>
-                  <option value="0">No</option>
-                  <option value="1">Sí</option>
-                </Form.Select>
-              </Col>
-            </Row>
           </div>
         )}
 
         <Form.Group>
-          <Form.Label className="fw-bold">Documentos adicionales <span className="text-muted fw-normal">(opcional)</span></Form.Label>
+          <Form.Label className="fw-bold">Documentos adicionales <span className="text-muted fw-normal">(opcional, solo PDF)</span></Form.Label>
           <div>
             <input
               ref={inputRef}

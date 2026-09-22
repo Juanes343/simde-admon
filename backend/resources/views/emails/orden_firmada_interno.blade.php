@@ -46,6 +46,10 @@
                 </td>
               </tr>
               <tr>
+                <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Teléfono / celular</td>
+                <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">{{ $doc['firma']['telefono'] ?? '—' }}</td>
+              </tr>
+              <tr>
                 <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Fecha de firma</td>
                 <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">
                   {{ !empty($doc['firma']['fecha']) ? \Carbon\Carbon::parse($doc['firma']['fecha'])->setTimezone('America/Bogota')->format('d/m/Y H:i') : '—' }}
@@ -55,8 +59,12 @@
               <tr>
                 <td style="padding:8px 14px; color:#888; border-bottom:1px solid #eaf3fb;">Vigencia</td>
                 <td style="padding:8px 14px; border-bottom:1px solid #eaf3fb;">
-                  {{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }} — {{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}
-                  ({{ $doc['prorroga'] ? 'con prórroga automática' : 'sin prórroga' }})
+                  @if($doc['fecha_inicio'] && $doc['fecha_fin'])
+                    {{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }} — {{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}
+                    ({{ $doc['prorroga'] ? 'con prórroga automática' : 'sin prórroga' }})
+                  @else
+                    Por definir (se completa al editar la orden de servicio)
+                  @endif
                 </td>
               </tr>
               <tr>

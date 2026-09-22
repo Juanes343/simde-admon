@@ -266,11 +266,11 @@
         <td style="width:22%; padding-right:8px; vertical-align:top;">
             <div class="info-box">
                 <div class="label">Fecha Inicio</div>
-                <div class="value">{{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}</div>
+                <div class="value">{{ ($doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') : 'Por definir') }}</div>
             </div>
             <div class="info-box mt8">
                 <div class="label">Fecha Fin</div>
-                <div class="value" style="color:#c0392b;">{{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}</div>
+                <div class="value" style="color:#c0392b;">{{ ($doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') : 'Por definir') }}</div>
             </div>
         </td>
 
@@ -389,10 +389,14 @@
         <tr>
             <td class="cond-label">Vigencia de la orden:</td>
             <td>
-                Del {{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}
-                al {{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}
-                @if($doc['prorroga'])
-                    (con prórroga automática)
+                @if($doc['fecha_inicio'] && $doc['fecha_fin'])
+                    Del {{ \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') }}
+                    al {{ \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') }}
+                    @if($doc['prorroga'])
+                        (con prórroga automática)
+                    @endif
+                @else
+                    Por definir
                 @endif
             </td>
             <td class="cond-label" style="padding-left:20px;">Forma de pago:</td>
@@ -442,6 +446,12 @@
                     <tr>
                         <td class="cond-label">Documento:</td>
                         <td>{{ $firma['documento'] }}</td>
+                    </tr>
+                    @endif
+                    @if(!empty($firma['telefono']))
+                    <tr>
+                        <td class="cond-label">Teléfono:</td>
+                        <td>{{ $firma['telefono'] }}</td>
                     </tr>
                     @endif
                     @if($firma['fecha'])
