@@ -113,17 +113,19 @@ class NotaCreditoService
                     $precio = $item['valor'];
                     $descripcion = $conceptoDesc ?? 'Item Nota Crédito';
                     $sku = $conceptoCod ?? 'ITEM-NC';
+                    $porcentajeImpuesto = 0;
 
                     if (isset($item['item_id'])) {
-                        // Buscar item original para traer datos
-                        $osItem = OrdenServicioItem::find($item['item_id']);
+                        // Buscar item original para traer datos (incluyendo IVA)
+                        $osItem = OrdenServicioItem::with('servicio.impuesto')->find($item['item_id']);
                         if ($osItem) {
                             $descripcion = $osItem->nombre_servicio ?? $osItem->descripcion;
                             $sku = $osItem->servicio_id;
-                            
+                            $porcentajeImpuesto = (float)($osItem->servicio->impuesto->porcentaje ?? 0);
+
                             // Verificar si es devolución total del ítem para conservar cantidad original
                             $totalOriginal = (float)($osItem->cantidad ?? 1) * (float)($osItem->precio_unitario ?? 0);
-                            
+
                             // Si la diferencia es mínima, asumimos que es nota total por ese ítem
                             if (abs($totalOriginal - (float)$item['valor']) < 1.0) {
                                 $cantidad = (float)($osItem->cantidad ?? 1);
@@ -132,6 +134,9 @@ class NotaCreditoService
                         }
                     }
 
+                    // Valor del IVA sobre el valor pedido en la nota (el valor ya es la base, sin IVA)
+                    $valorImpuesto = round($item['valor'] * ($porcentajeImpuesto / 100), 2);
+
                     NotaCreditoItem::create([
                         'nota_credito_id' => $notaCredito->id,
                         'codigo_item' => $sku,
@@ -139,9 +144,9 @@ class NotaCreditoService
                         'cantidad' => $cantidad,
                         'precio_unitario' => $precio,
                         'subtotal' => $item['valor'], // El subtotal de la línea siempre debe sumar lo que se pidió
-                        'porcentaje_impuesto' => 0,
-                        'valor_impuesto' => 0,
-                        'total' => $item['valor'],
+                        'porcentaje_impuesto' => $porcentajeImpuesto,
+                        'valor_impuesto' => $valorImpuesto,
+                        'total' => round($item['valor'] + $valorImpuesto, 2),
                     ]);
                 }
             }
@@ -194,6 +199,11 @@ class NotaCreditoService
                                   ->where('factura_fiscal', $notaCredito->factura_fiscal)
                                   ->with(['tercero'])
                                   ->first();
+
+            // Facturas emitidas por SIMDE: la nota también sale por SIMDE (DataIco no conoce esas facturas)
+            if ($factura && $factura->proveedor_fe === 'simde') {
+                return app(\App\Services\FacturacionElectronica\SimdeNotaService::class)->enviar($notaCredito, $factura);
+            }
 
             if ($factura) {
                 // --- Factura INTERNA ---
@@ -633,20 +643,52 @@ class NotaCreditoService
     {
         $items = [];
 
-        // Determinar si la factura original tiene IVA y calcular el porcentaje
-        $ivaPercent = 0;
+        // Tarifa "de respaldo": promedio de la factura completa (gravamen / total). Solo se usa como
+        // último recurso, cuando no hay forma de saber la tarifa real de un ítem puntual.
+        $ivaPercentFactura = 0;
         $gravamen = (float) $factura->gravamen;
         $totalFactura = (float) $factura->total_factura;
         if ($gravamen > 0 && $totalFactura > 0) {
-            $ivaPercent = (int) round(($gravamen / $totalFactura) * 100);
+            $ivaPercentFactura = round(($gravamen / $totalFactura) * 100, 2);
         }
 
         // Cargar los items de la nota crédito (ya deben existir en la tabla notas_credito_items)
         $notaCredito->load('items');
 
         if ($notaCredito->items && $notaCredito->items->count() > 0) {
+            // Mapa servicio_id => % IVA de la factura, para notas antiguas creadas antes de guardar
+            // el porcentaje por ítem (fallback 1, ver abajo).
+            $factura->load('items.ordenServicioItem.servicio.impuesto');
+            $ivaPorServicio = [];
+            foreach ($factura->items as $fi) {
+                $osItem = $fi->ordenServicioItem;
+                if ($osItem && $osItem->servicio_id) {
+                    $pct = (float) ($osItem->servicio->impuesto->porcentaje ?? 0);
+                    if ($pct > 0) {
+                        $ivaPorServicio[(string) $osItem->servicio_id] = $pct;
+                    }
+                }
+            }
+
             foreach ($notaCredito->items as $ncItem) {
-                // $ncItem ya tiene la info básica guardada (descripcion, precio, etc.)
+                // Tarifa de este ítem puntual: la guardada al crear la nota (dato exacto, viene del
+                // servicio real del ítem). Si no existe (notas creadas antes de este ajuste), se
+                // reconstruye a partir del código del servicio.
+                $porcentajeImpuesto = (float) $ncItem->porcentaje_impuesto;
+
+                if ($porcentajeImpuesto == 0 && isset($ivaPorServicio[(string) $ncItem->codigo_item])) {
+                    $porcentajeImpuesto = $ivaPorServicio[(string) $ncItem->codigo_item];
+                }
+
+                if ($porcentajeImpuesto == 0 && !empty($ncItem->codigo_item)) {
+                    $osItemFallback = OrdenServicioItem::with('servicio.impuesto')
+                        ->where('servicio_id', $ncItem->codigo_item)
+                        ->first();
+                    if ($osItemFallback) {
+                        $porcentajeImpuesto = (float) ($osItemFallback->servicio->impuesto->porcentaje ?? 0);
+                    }
+                }
+
                 $itemData = [
                     'sku' => $ncItem->codigo_item ?? 'ITEM-NC-' . $ncItem->id,
                     'description' => $ncItem->descripcion ?? 'Item Nota Crédito',
@@ -654,24 +696,25 @@ class NotaCreditoService
                     'price' => (float) $ncItem->precio_unitario,
                     'original_price' => (float) $ncItem->precio_unitario,
                 ];
-                if ($ivaPercent > 0) {
-                    $itemData['taxes'] = [['tax_category' => 'IVA', 'rate' => $ivaPercent]];
+                if ($porcentajeImpuesto > 0) {
+                    $itemData['taxes'] = [['tax_category' => 'IVA', 'tax_rate' => $porcentajeImpuesto]];
                 }
                 $items[] = $itemData;
             }
         }
-        
+
         // Si no hay items guardados (ej. notas antiguas), fallback a lógica anterior
         if (empty($items)) {
             // Si la nota es TOTAL, traemos los items de la factura original
             if ($notaCredito->alcance === 'TOTAL') {
-                // Cargar los items de la factura con sus detalles
-                $factura->load('items.ordenServicioItem');
-                
+                // Cargar los items de la factura con sus detalles (incluye el IVA de cada uno)
+                $factura->load('items.ordenServicioItem.servicio.impuesto');
+
                 if ($factura->items && $factura->items->count() > 0) {
                     foreach ($factura->items as $facItem) {
                         $osItem = $facItem->ordenServicioItem;
                         if ($osItem) {
+                            $porcentajeImpuesto = (float) ($osItem->servicio->impuesto->porcentaje ?? 0);
                             $itemData = [
                                 'sku' => $osItem->servicio_id ?? 'ITEM',
                                 'description' => $osItem->nombre_servicio ?? $osItem->descripcion ?? 'Item de factura',
@@ -679,15 +722,15 @@ class NotaCreditoService
                                 'price' => (float) ($osItem->precio_unitario ?? 0),
                                 'original_price' => (float) ($osItem->precio_unitario ?? 0),
                             ];
-                            if ($ivaPercent > 0) {
-                                $itemData['taxes'] = [['tax_category' => 'IVA', 'rate' => $ivaPercent]];
+                            if ($porcentajeImpuesto > 0) {
+                                $itemData['taxes'] = [['tax_category' => 'IVA', 'tax_rate' => $porcentajeImpuesto]];
                             }
                             $items[] = $itemData;
                         }
                     }
                 }
             }
-            // Fallback final
+            // Fallback final: sin datos de ítem disponibles, se usa la tarifa promedio de la factura
             if (empty($items)) {
                 $descripcion = $notaCredito->tipo_nota === 'DEBITO' ? 'NOTA DÉBITO' : 'NOTA CRÉDITO';
                 $itemData = [
@@ -697,13 +740,13 @@ class NotaCreditoService
                     'price' => (float) $notaCredito->valor_nota,
                     'original_price' => (float) $notaCredito->valor_nota,
                 ];
-                if ($ivaPercent > 0) {
-                    $itemData['taxes'] = [['tax_category' => 'IVA', 'rate' => $ivaPercent]];
+                if ($ivaPercentFactura > 0) {
+                    $itemData['taxes'] = [['tax_category' => 'IVA', 'tax_rate' => $ivaPercentFactura]];
                 }
                 $items[] = $itemData;
             }
         }
-        
+
         return $items;
     }
 
