@@ -2,134 +2,222 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\SolicitudFirmaMailable;
 use App\Models\OrdenServicio;
+use App\Services\OrdenFirmaService;
+use App\Services\OrdenServicioPdfService;
+use App\Support\FirmaImagen;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\SolicitudFirmaMailable;
-use App\Mail\OrdenFirmadaMailable; // Asumiremos que creas este mailable luego o reutilizas lógica
-use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
+/**
+ * Firma del cliente sobre una orden de servicio que no nació de una cotización aprobada
+ * (las órdenes de cotizaciones aprobadas ya quedan firmadas). El cliente recibe un enlace por correo,
+ * revisa la orden, y la firma con su nombre y documento.
+ */
 class FirmaDigitalController extends Controller
 {
     /**
-     * Genera un token de firma y envía el correo al tercero.
+     * Genera el enlace de firma (con token y vigencia) y lo envía al correo del tercero, con la orden en PDF.
      */
-    public function solicitarFirma(Request $request, $id)
-    {
-        try {
-            $orden = OrdenServicio::findOrFail($id);
-
-            // Validar que la orden esté activa y sin firmar
-            if ($orden->sw_estado !== '1') {
-                return response()->json(['message' => 'La orden no está activa.'], 400);
-            }
-            if ($orden->fecha_firma) {
-                return response()->json(['message' => 'La orden ya está firmada.'], 400);
-            }
-
-            // Generar Token
-            $token = Str::random(64);
-            $orden->signature_token = $token;
-            // El token expira en 48 horas, por ejemplo
-            $orden->signature_token_expires_at = Carbon::now()->addHours(48);
-            $orden->save();
-
-            // Enviar Correo
-            // Obtener email del tercero
-            $email = $orden->tercero->email ?? null;
-            
-            // Construir link con el frontend URL
-            // Usamos la variable de entorno o una url por defecto basada en la del usuario
-            $frontendUrl = env('FRONTEND_URL', 'https://devel82els.simde.com.co/simde-admon/frontend/build'); 
-            
-            // Si usas HashRouter (#), asegúrate de incluir el #
-            $link = "{$frontendUrl}/#/firmar-orden/{$id}/{$token}";
-
-            if ($email) {
-                Mail::to($email)->send(new SolicitudFirmaMailable($orden, $link));
-                $mensaje = 'Solicitud de firma enviada al correo: ' . $email;
-            } else {
-                $mensaje = 'Token generado, pero el tercero no tiene email registrado.';
-            }
-
-            return response()->json([
-                'message' => $mensaje,
-                'link_debug' => $link // Útil para pruebas si no sale el correo
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error solicitando firma: ' . $e->getMessage());
-            return response()->json(['message' => 'Error interno al solicitar firma: ' . $e->getMessage()], 500);
-        }
-    }
-
-    /**
-     * Verifica si el token es válido antes de mostrar la pantalla de firma (opcional pero recomendado)
-     */
-    public function verificarToken(Request $request, $id, $token)
+    public function solicitarFirma(Request $request, $id, OrdenServicioPdfService $pdfService)
     {
         $orden = OrdenServicio::find($id);
 
-        if (!$orden || $orden->signature_token !== $token) {
-            return response()->json(['message' => 'Token inválido o expirado.'], 404);
+        if (!$orden) {
+            return response()->json(['message' => 'Orden de servicio no encontrada.'], 404);
+        }
+
+        if ($orden->sw_estado !== '1') {
+            return response()->json(['message' => 'La orden no está activa.'], 400);
         }
 
         if ($orden->fecha_firma) {
-             return response()->json(['message' => 'La orden ya ha sido firmada.'], 400);
+            return response()->json(['message' => 'La orden ya está firmada.'], 400);
         }
 
-        /* 
-        // Si usas expiración:
-        if (Carbon::now()->greaterThan($orden->signature_token_expires_at)) {
-            return response()->json(['message' => 'El enlace ha expirado.'], 400);
+        $email = $orden->tercero?->email;
+        if (!$email) {
+            return response()->json([
+                'message' => 'El tercero no tiene un correo registrado. Regístrelo para poder solicitar la firma.',
+            ], 422);
         }
-        */
+
+        // En BD solo se guarda el hash del token; el token en claro va únicamente en el enlace del correo
+        $token    = Str::random(64);
+        $expiraEn = now()->addDays(config('ordenes_servicio.dias_vigencia_firma', 7));
+
+        $orden->update([
+            'signature_token'            => hash('sha256', $token),
+            'signature_token_expires_at' => $expiraEn,
+        ]);
+
+        $enlace  = $this->urlFrontend($request) . "/#/firmar-orden/{$orden->orden_servicio_id}/{$token}";
+        $pdfPath = null;
+
+        try {
+            $doc = $pdfService->datos($orden);
+
+            $pdfPath = tempnam(sys_get_temp_dir(), 'os_');
+            file_put_contents($pdfPath, $pdfService->generar($orden, $doc)->output());
+
+            Mail::to($email)->send(new SolicitudFirmaMailable($orden, $enlace, $doc, $pdfPath, $expiraEn));
+
+            return response()->json(['message' => "Solicitud de firma enviada al correo: {$email}"]);
+        } catch (\Throwable $e) {
+            Log::error("Error solicitando firma de {$orden->numero_orden}: " . $e->getMessage());
+            return response()->json(['message' => 'Error al enviar la solicitud de firma: ' . $e->getMessage()], 500);
+        } finally {
+            if ($pdfPath) {
+                @unlink($pdfPath);
+            }
+        }
+    }
+
+    /**
+     * (Público) Datos de la orden para mostrar en la página de firma.
+     */
+    public function verificarToken($id, $token, OrdenServicioPdfService $pdfService)
+    {
+        $orden = OrdenServicio::find($id);
+
+        if ($error = $this->validarEnlace($orden, $token)) {
+            return $error;
+        }
+
+        $doc = $pdfService->datos($orden);
 
         return response()->json([
-            'id' => $orden->id,
-            'cliente' => $orden->tercero->nombre_completo ?? 'Cliente',
-            'fecha' => $orden->created_at->format('Y-m-d'),
-            'valid' => true
+            'tipo'             => 'orden',
+            'numero_documento' => $doc['numero_orden'],
+            'cliente'          => $doc['cliente']['nombre'],
+            // Una orden creada al aprobar una cotización puede no tener fechas todavía
+            'fecha_inicio'     => $doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('Y-m-d') : null,
+            'fecha_fin'        => $doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('Y-m-d') : null,
+            'periodo_dias'     => $doc['periodo_dias'],
+            'prorroga'         => $doc['prorroga'],
+            'metodo_pago'      => $doc['metodo_pago'],
+            'tipo_pago'        => $doc['tipo_pago'],
+            'orden_compra'     => $doc['orden_compra'],
+            'notas'            => $doc['notas'],
+            'subtotal'         => $doc['totales']['subtotal'],
+            'descuento_total'  => $doc['totales']['descuento'],
+            'impuestos_total'  => $doc['totales']['impuestos'],
+            'retencion_total'  => round($doc['totales']['retencion'], 2),
+            'total'            => $doc['totales']['total'],
+            'items'            => array_map(fn ($item) => [
+                'descripcion'          => $item['descripcion'],
+                'observaciones'        => $item['observaciones'],
+                'cantidad'             => $item['cantidad'],
+                'tipo_unidad'          => $item['unidad'],
+                'precio_unitario'      => $item['precio'],
+                'porcentaje_descuento' => $item['descuento'],
+                'impuesto_porcentaje'  => $item['impuesto_pct'],
+                'porcentaje_ret_fuente'=> $item['retencion'],
+                'subtotal'             => $item['subtotal'],
+                'total'                => $item['total'],
+            ], $doc['items']),
+            'enlace_expira_en' => $orden->signature_token_expires_at?->toIso8601String(),
         ]);
     }
 
     /**
-     * Guarda la firma enviada desde el frontend
+     * (Público) Guarda la firma del cliente y le envía la orden firmada (PDF), también a los correos internos.
      */
-    public function firmar(Request $request)
+    public function firmar(Request $request, $id, $token, OrdenFirmaService $firmaService)
     {
-        $request->validate([
-            'id' => 'required|integer',
-            'token' => 'required|string',
-            'firma' => 'required|string', // Base64 string
+        $validator = Validator::make($request->all(), [
+            'nombre'    => 'required|string|max:150',
+            'documento' => 'required|string|max:50',
+            'telefono'  => ['required', 'string', 'max:30', 'regex:/^[0-9+()\-\s]{7,30}$/'],
+            'firma'     => 'required|string|max:700000',
+        ], [
+            'nombre.required'    => 'Ingrese su nombre completo.',
+            'documento.required' => 'Ingrese su número de documento.',
+            'telefono.required'  => 'Ingrese su celular o teléfono de contacto.',
+            'telefono.regex'     => 'Ingrese un celular o teléfono válido (solo números, +, -, paréntesis y espacios).',
+            'firma.required'     => 'Por favor firme en el recuadro antes de continuar.',
+            'firma.max'          => 'La imagen de la firma es demasiado grande.',
         ]);
 
-        try {
-            $orden = OrdenServicio::findOrFail($request->id);
-
-            if ($orden->signature_token !== $request->token) {
-                return response()->json(['message' => 'Token inválido.'], 403);
-            }
-
-            // Guardar firma y fecha
-            $orden->firma_tercero = $request->firma;
-            $orden->fecha_firma = Carbon::now();
-            $orden->signature_token = null; // Invalidar token tras uso
-            $orden->signature_token_expires_at = null;
-            $orden->save();
-
-            // Generar PDF Firmado (Opcional: Adjuntar y enviar por correo)
-            // $pdf = Pdf::loadView('pdf.orden_firmada', ['orden' => $orden]);
-            // Mail::to($orden->tercero->email)->send(new OrdenFirmadaMailable($orden, $pdf));
-
-            return response()->json(['message' => 'Orden firmada correctamente.']);
-
-        } catch (\Exception $e) {
-            Log::error('Error guardando firma: ' . $e->getMessage());
-            return response()->json(['message' => 'Error al guardar la firma.'], 500);
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
         }
+
+        $firma = $request->input('firma');
+        if (!FirmaImagen::esValida($firma)) {
+            return response()->json(['message' => 'La firma no tiene un formato válido.'], 422);
+        }
+
+        try {
+            $resultado = DB::transaction(function () use ($id, $token, $request, $firma) {
+                // Bloqueo de fila: un doble clic no puede firmar dos veces
+                $orden = OrdenServicio::lockForUpdate()->find($id);
+
+                if ($error = $this->validarEnlace($orden, $token)) {
+                    return ['error' => $error];
+                }
+
+                $orden->update([
+                    'firma_tercero'      => $firma,
+                    'fecha_firma'        => now(),
+                    'firmante_nombre'    => trim($request->input('nombre')),
+                    'firmante_documento' => trim($request->input('documento')),
+                    'firmante_telefono'  => trim($request->input('telefono')),
+                    'firma_ip'           => $request->ip(),
+                ]);
+
+                return ['orden' => $orden];
+            });
+        } catch (\Throwable $e) {
+            Log::error("Error guardando firma de la orden {$id}: " . $e->getMessage());
+            return response()->json(['message' => 'No se pudo guardar la firma. Intente nuevamente.'], 500);
+        }
+
+        if (isset($resultado['error'])) {
+            return $resultado['error'];
+        }
+
+        // Ya confirmada la firma: los correos no pueden revertirla
+        $firmaService->notificarFirma($resultado['orden']);
+
+        return response()->json([
+            'message'      => 'Orden de servicio firmada correctamente.',
+            'numero_orden' => $resultado['orden']->numero_orden,
+        ]);
     }
-} 
+
+    /**
+     * Devuelve una respuesta de error si el enlace no es utilizable, o null si todo está bien.
+     */
+    private function validarEnlace(?OrdenServicio $orden, string $token): ?JsonResponse
+    {
+        $hash = $orden?->signature_token;
+
+        if (!$orden || !$hash || !hash_equals($hash, hash('sha256', $token))) {
+            return response()->json(['message' => 'El enlace no es válido.'], 404);
+        }
+
+        if ($orden->fecha_firma) {
+            return response()->json(['message' => 'Esta orden de servicio ya fue firmada.', 'estado' => 'firmada'], 409);
+        }
+
+        if ($orden->sw_estado !== '1') {
+            return response()->json(['message' => 'Esta orden de servicio ya no está disponible para firma.'], 410);
+        }
+
+        if ($orden->signature_token_expires_at && $orden->signature_token_expires_at->isPast()) {
+            return response()->json(['message' => 'El enlace de firma expiró. Solicite uno nuevo a SIMDE.'], 410);
+        }
+
+        return null;
+    }
+}

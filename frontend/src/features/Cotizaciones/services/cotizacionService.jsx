@@ -54,8 +54,31 @@ const cotizacionService = {
       });
   },
 
-  enviarEmail: async (id, email) => {
-    const response = await api.post(`/cotizaciones/${id}/enviar-email`, { email });
+  // `adjuntos`: File[] opcionales que se envían junto al PDF de la cotización.
+  enviarEmail: async (id, email, adjuntos = []) => {
+    const formData = new FormData();
+    formData.append('email', email);
+    adjuntos.forEach((archivo) => formData.append('adjuntos[]', archivo));
+
+    const response = await api.post(`/cotizaciones/${id}/enviar-email`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  // ── Aprobación pública (enlace del correo, sin sesión) ──────────────────
+  getAprobacion: async (id, token) => {
+    const response = await api.get(`/public/cotizaciones/${id}/aprobar/${token}`);
+    return response.data;
+  },
+
+  aprobarPublica: async (id, token, payload) => {
+    const response = await api.post(`/public/cotizaciones/${id}/aprobar/${token}`, payload);
+    return response.data;
+  },
+
+  rechazarPublica: async (id, token, motivo) => {
+    const response = await api.post(`/public/cotizaciones/${id}/rechazar/${token}`, { motivo });
     return response.data;
   },
 };

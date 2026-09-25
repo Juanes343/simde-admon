@@ -47,6 +47,7 @@ import ReporteCausacionPage from './features/Causacion/pages/ReporteCausacionPag
 import CotizacionesListPage from './features/Cotizaciones/pages/CotizacionesListPage';
 import CotizacionFormPage from './features/Cotizaciones/pages/CotizacionFormPage';
 import CotizacionDetailPage from './features/Cotizaciones/pages/CotizacionDetailPage';
+import CotizacionAprobacionPage from './features/Cotizaciones/pages/CotizacionAprobacionPage';
 
 // Usuarios
 import UsuarioPermisosView from './features/Usuarios/views/UsuarioPermisosView';
@@ -75,6 +76,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/firmar-orden/:id/:token" element={<OrdenServicioSignaturePage />} />
+          <Route path="/aprobar-cotizacion/:id/:token" element={<CotizacionAprobacionPage />} />
           
           {/* Rutas protegidas */}
           <Route

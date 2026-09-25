@@ -63,6 +63,10 @@ class OrdenServicio extends Model
         'signature_token_expires_at',
         'firma_tercero',
         'fecha_firma',
+        'firmante_nombre',
+        'firmante_documento',
+        'firmante_telefono',
+        'firma_ip',
     ];
 
     protected $casts = [
@@ -75,6 +79,10 @@ class OrdenServicio extends Model
     ];
 
     protected $appends = ['tercero'];
+
+    // La imagen de la firma (base64) es pesada y el frontend solo necesita saber si hay firma (fecha_firma)
+    // y el token del enlace de firma es un secreto que no debe salir en las respuestas
+    protected $hidden = ['firma_tercero', 'signature_token'];
 
     /**
      * Obtener el tercero asociado (composite key)
@@ -132,6 +140,11 @@ class OrdenServicio extends Model
         
         // Si está inactiva, no permite facturar
         if ($this->sw_estado !== '1') {
+            return false;
+        }
+
+        // Una orden sin fechas (creada al aprobar una cotización) aún no está lista para facturar
+        if (! $this->fecha_inicio || ! $this->fecha_fin) {
             return false;
         }
 

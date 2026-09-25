@@ -7,11 +7,77 @@ use App\Models\OrdenServicio;
 use App\Models\OrdenServicioItem;
 use App\Models\FacFacturaItem;
 use App\Models\Servicio;
+use App\Mail\OrdenServicioMail;
+use App\Services\OrdenServicioPdfService;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class OrdenServicioController extends Controller
 {
+    /**
+     * Descargar el PDF de la orden (con la firma del cliente si ya la firmó)
+     */
+    public function descargarPdf($id, OrdenServicioPdfService $pdfService)
+    {
+        $orden = OrdenServicio::find($id);
+
+        if (!$orden) {
+            return response()->json(['message' => 'Orden de servicio no encontrada'], 404);
+        }
+
+        return $pdfService->generar($orden)->download("{$orden->numero_orden}.pdf");
+    }
+
+    /**
+     * Enviar la orden de servicio (PDF) por correo
+     */
+    public function enviarEmail(Request $request, $id, OrdenServicioPdfService $pdfService)
+    {
+        $orden = OrdenServicio::find($id);
+
+        if (!$orden) {
+            return response()->json(['message' => 'Orden de servicio no encontrada'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+        ], [
+            'email.required' => 'Ingrese un correo destinatario',
+            'email.email'    => 'El correo destinatario no es válido',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        $pdfPath = null;
+
+        try {
+            $doc = $pdfService->datos($orden);
+
+            $pdfPath = tempnam(sys_get_temp_dir(), 'os_');
+            file_put_contents($pdfPath, $pdfService->generar($orden, $doc)->output());
+
+            Mail::to($request->email)->send(new OrdenServicioMail($orden, $pdfPath, $doc));
+
+            return response()->json([
+                'message' => "Orden de servicio enviada correctamente a {$request->email}",
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => 'Error al enviar el correo: ' . $e->getMessage(),
+            ], 500);
+        } finally {
+            if ($pdfPath) {
+                @unlink($pdfPath);
+            }
+        }
+    }
+
     /**
      * Display a listing of ordenes de servicio
      */

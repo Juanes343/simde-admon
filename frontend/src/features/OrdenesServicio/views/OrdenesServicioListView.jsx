@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Table, Badge, Button, Spinner } from 'react-bootstrap';
 import { format } from 'date-fns';
 
-const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, onRequestSignature }) => {
+const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, onRequestSignature, onDownloadPdf, onSendEmail }) => {
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -105,6 +105,13 @@ const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, o
                 ) : (
                   <Badge bg="danger">Inactivo</Badge>
                 )}
+                {orden.fecha_firma && (
+                  <div>
+                    <Badge bg="success" className="mt-1">
+                      <i className="fas fa-file-signature me-1"></i>Firmada
+                    </Badge>
+                  </div>
+                )}
                 {orden.permite_facturar_hoy && (
                   <div>
                     <Badge bg="info" className="mt-1">
@@ -124,15 +131,35 @@ const OrdenesServicioListView = ({ ordenes, loading, onEdit, onDelete, onView, o
                   <i className="fas fa-eye"></i>
                 </Button>
                 <Button
-                  variant="outline-dark"
+                  variant="outline-secondary"
                   size="sm"
                   className="me-1"
-                  onClick={() => onRequestSignature && onRequestSignature(orden)}
-                  title={orden.fecha_firma ? 'Firmado' : 'Solicitar Firma'}
-                  disabled={!orden.sw_estado || orden.sw_estado === '0'}
+                  onClick={() => onDownloadPdf && onDownloadPdf(orden)}
+                  title="Descargar PDF"
                 >
-                  <i className={`fas ${orden.fecha_firma ? 'fa-check-circle text-success' : 'fa-file-signature'}`}></i>
+                  <i className="fas fa-file-pdf"></i>
                 </Button>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  className="me-1"
+                  onClick={() => onSendEmail && onSendEmail(orden)}
+                  title="Enviar por correo"
+                >
+                  <i className="fas fa-envelope"></i>
+                </Button>
+                {!orden.fecha_firma && (
+                  <Button
+                    variant="outline-dark"
+                    size="sm"
+                    className="me-1"
+                    onClick={() => onRequestSignature && onRequestSignature(orden)}
+                    title="Solicitar Firma"
+                    disabled={!orden.sw_estado || orden.sw_estado === '0'}
+                  >
+                    <i className="fas fa-file-signature"></i>
+                  </Button>
+                )}
                 <Button
                   variant="outline-primary"
                   size="sm"

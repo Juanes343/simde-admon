@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light">
     <meta name="supported-color-schemes" content="light">
-    <title>Solicitud de firma — Orden de servicio {{ $doc['numero_orden'] }}</title>
+    <title>Orden de servicio {{ $orden->numero_orden }} — SIMDE SAS</title>
 </head>
 <body style="margin:0; padding:0; background:#f0f4f8; font-family: Arial, Helvetica, sans-serif; font-size:14px; color:#2c3e50;">
 
@@ -21,19 +21,25 @@
             <p style="margin:0; font-size:22px; font-weight:700; color:#ffffff; letter-spacing:2px;">SIMDE SAS</p>
             <p style="margin:6px 0 0; font-size:11px; color:rgba(255,255,255,0.75); letter-spacing:1px;">SOPORTE IMPLEMENTACION Y DESARROLLO</p>
             <div style="margin-top:18px; display:inline-block; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.4); border-radius:6px; padding:8px 22px;">
-              <p style="margin:0; font-size:11px; color:rgba(255,255,255,0.85); letter-spacing:1px;">SOLICITUD DE FIRMA · ORDEN DE SERVICIO</p>
-              <p style="margin:4px 0 0; font-size:20px; font-weight:700; color:#ffffff;">{{ $doc['numero_orden'] }}</p>
+              <p style="margin:0; font-size:11px; color:rgba(255,255,255,0.85); letter-spacing:1px;">ORDEN DE SERVICIO</p>
+              <p style="margin:4px 0 0; font-size:20px; font-weight:700; color:#ffffff;">{{ $orden->numero_orden }}</p>
             </div>
           </td>
         </tr>
 
-        {{-- ── SALUDO ── --}}
+        {{-- ── MENSAJE ── --}}
         <tr>
           <td style="padding:32px 40px 0;">
-            <p style="margin:0; font-size:16px; font-weight:600; color:#1a5276;">Estimado/a {{ $doc['cliente']['nombre'] }},</p>
+            <p style="margin:0; font-size:16px; font-weight:600; color:#1a5276;">Estimado/a {{ $nombreTercero }},</p>
             <p style="margin:12px 0 0; line-height:1.7; color:#444;">
-              Le solicitamos revisar y firmar digitalmente la orden de servicio <strong>{{ $doc['numero_orden'] }}</strong>,
-              cuyo detalle encontrará en el PDF adjunto. La firma se realiza en línea, en pocos pasos, desde el botón de este correo.
+              Hemos recibido la aprobación y firma de la cotización <strong>{{ $cotizacion->numero_cotizacion }}</strong>
+              @if($cotizacion->firmante_nombre)
+                por parte de <strong>{{ $cotizacion->firmante_nombre }}</strong>
+              @endif
+              @if($cotizacion->fecha_firma)
+                el {{ $cotizacion->fecha_firma->setTimezone('America/Bogota')->format('d/m/Y \a \l\a\s H:i') }}.
+              @endif
+              Con base en ella se generó la orden de servicio <strong>{{ $orden->numero_orden }}</strong>, que adjuntamos en formato PDF.
             </p>
           </td>
         </tr>
@@ -45,52 +51,17 @@
               <tr>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #2e86c1;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Inicio</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ ($doc['fecha_inicio'] ? \Carbon\Carbon::parse($doc['fecha_inicio'])->format('d/m/Y') : 'Por definir') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#1a5276;">{{ $orden->fecha_inicio?->format('d/m/Y') ?? 'Por definir' }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="30%" style="background:#f0f4f8; border-radius:6px; padding:14px 16px; text-align:center; border-left:4px solid #e74c3c;">
                   <p style="margin:0; font-size:10px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">Fin</p>
-                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ ($doc['fecha_fin'] ? \Carbon\Carbon::parse($doc['fecha_fin'])->format('d/m/Y') : 'Por definir') }}</p>
+                  <p style="margin:5px 0 0; font-size:14px; font-weight:700; color:#c0392b;">{{ $orden->fecha_fin?->format('d/m/Y') ?? 'Por definir' }}</p>
                 </td>
                 <td width="4%"></td>
                 <td width="32%" style="background:#1a5276; border-radius:6px; padding:14px 16px; text-align:center;">
                   <p style="margin:0; font-size:10px; color:rgba(255,255,255,0.75); text-transform:uppercase; letter-spacing:0.5px;">Total</p>
-                  <p style="margin:5px 0 0; font-size:18px; font-weight:700; color:#ffffff;">$ {{ number_format($doc['totales']['total'], 2, ',', '.') }}</p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-
-        {{-- ── BOTÓN DE FIRMA ── --}}
-        <tr>
-          <td style="padding:28px 40px 0;">
-            <table width="100%" cellpadding="0" cellspacing="0" style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:12px;">
-              <tr>
-                <td style="padding:32px 28px; text-align:center;">
-                  <p style="margin:0 0 6px; font-size:17px; font-weight:700; color:#14532d;">
-                    &check; Firme su orden de servicio
-                  </p>
-                  <p style="margin:0 0 22px; font-size:13px; color:#3a6b52; line-height:1.6;">
-                    Revísela en línea y fírmela en pocos pasos.
-                  </p>
-                  <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
-                    <tr>
-                      <td bgcolor="#1a8a6a" style="background-color:#1a8a6a; border-radius:8px;">
-                        <a href="{{ $link }}" target="_blank"
-                           style="display:inline-block; padding:17px 46px; font-family:Arial, Helvetica, sans-serif; font-size:16px; font-weight:700; color:#ffffff !important; text-decoration:none; border-radius:8px;">
-                          Revisar y firmar orden &nbsp;&rarr;
-                        </a>
-                      </td>
-                    </tr>
-                  </table>
-                  <p style="margin:20px 0 0; font-size:11px; color:#5a8a70;">
-                    El enlace estará disponible hasta el {{ $expiraEn->copy()->setTimezone('America/Bogota')->format('d/m/Y') }}.
-                  </p>
-                  <p style="margin:10px 0 0; font-size:10px; color:#7a9a8a; word-break:break-all;">
-                    Si el botón no funciona, copie este enlace en su navegador:<br>
-                    <a href="{{ $link }}" style="color:#3a6b52;">{{ $link }}</a>
-                  </p>
+                  <p style="margin:5px 0 0; font-size:18px; font-weight:700; color:#ffffff;">$ {{ number_format(floatval($cotizacion->total), 2, ',', '.') }}</p>
                 </td>
               </tr>
             </table>
@@ -101,7 +72,7 @@
           <td style="padding:24px 40px 0;">
             <div style="background:#eafaf1; border:1px solid #a9dfbf; border-radius:6px; padding:14px 18px; text-align:center;">
               <p style="margin:0; font-size:13px; color:#196f3d;">
-                📎 &nbsp;Se adjunta la orden de servicio en formato <strong>PDF</strong> para su revisión.
+                📎 &nbsp;Se adjunta la orden de servicio en formato <strong>PDF</strong>.
               </p>
             </div>
           </td>
@@ -111,7 +82,7 @@
         <tr>
           <td style="padding:28px 40px;">
             <p style="margin:0; font-size:14px; line-height:1.7; color:#444;">
-              Si tiene alguna duda sobre el contenido de la orden, puede responder directamente a este correo antes de firmar.
+              Gracias por confiar en nosotros. Ante cualquier consulta puede responder directamente a este correo.
             </p>
             <p style="margin:18px 0 0; font-size:14px; color:#2c3e50;">
               Cordialmente,<br>

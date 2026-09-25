@@ -8,11 +8,14 @@ use App\Models\CotizacionItem;
 use App\Models\OrdenServicio;
 use App\Models\OrdenServicioItem;
 use App\Models\Impuesto;
+use App\Services\CotizacionOrdenService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class CotizacionController extends Controller
 {
@@ -201,6 +204,9 @@ class CotizacionController extends Controller
                 'tipo_pago'         => $request->tipo_pago,
                 'orden_compra'      => $request->orden_compra,
                 'notas'             => $request->notas,
+                // Si se edita, el enlace enviado antes ya no corresponde a lo que ve el cliente
+                'token_aprobacion'           => null,
+                'token_aprobacion_expira_en' => null,
             ]);
 
             // Reemplazar ítems
@@ -249,6 +255,14 @@ class CotizacionController extends Controller
 
         $cotizacion->update(['sw_estado' => $request->estado]);
 
+        // Solo una cotización "enviada" puede ser aprobada por el cliente desde su enlace
+        if ($request->estado !== 'enviada') {
+            $cotizacion->update([
+                'token_aprobacion'           => null,
+                'token_aprobacion_expira_en' => null,
+            ]);
+        }
+
         return response()->json([
             'message'    => 'Estado actualizado exitosamente',
             'sw_estado'  => $cotizacion->sw_estado,
@@ -259,7 +273,7 @@ class CotizacionController extends Controller
     /**
      * Convertir cotización aprobada a Orden de Servicio
      */
-    public function convertirAOrden(Request $request, $id)
+    public function convertirAOrden(Request $request, $id, CotizacionOrdenService $servicioOrden)
     {
         $cotizacion = Cotizacion::with('items')->find($id);
 
@@ -295,43 +309,14 @@ class CotizacionController extends Controller
         try {
             DB::beginTransaction();
 
-            $orden = OrdenServicio::create([
-                'numero_orden'             => OrdenServicio::generarNumeroOrden(),
-                'tipo_id_tercero'          => $cotizacion->tipo_id_tercero,
-                'tercero_id'               => $cotizacion->tercero_id,
+            $orden = $servicioOrden->crearOrden($cotizacion, [
                 'fecha_inicio'             => $request->fecha_inicio,
                 'fecha_fin'                => $request->fecha_fin,
                 'sw_prorroga_automatica'   => $request->sw_prorroga_automatica ?? '0',
                 'periodo_facturacion_dias' => $request->periodo_facturacion_dias ?? 30,
                 'porcentaje_soltec'        => $request->porcentaje_soltec ?? 0,
                 'porcentaje_ret_fuente'    => $request->porcentaje_ret_fuente ?? 0,
-                'observaciones'            => $cotizacion->notas,
-                'sw_estado'                => '1',
-                'usuario_id'               => $request->user()->usuario_id,
-            ]);
-
-            foreach ($cotizacion->items as $i => $item) {
-                OrdenServicioItem::create([
-                    'orden_servicio_id' => $orden->orden_servicio_id,
-                    'servicio_id'       => $item->servicio_id,
-                    'nombre_servicio'   => $item->descripcion,
-                    'descripcion'       => $item->observaciones,
-                    'cantidad'          => $item->cantidad,
-                    'tipo_unidad'       => $item->tipo_unidad ?? 'UNIDAD',
-                    'precio_unitario'   => $item->precio_unitario,
-                    'subtotal'          => $item->subtotal,
-                    'orden'             => $i,
-                    'observaciones'     => $item->observaciones,
-                    'estado'            => '1',
-                    'porcentaje_soltec' => $item->porcentaje_soltec ?? 0,
-                    'porcentaje_descuento' => $item->porcentaje_descuento ?? 0,
-                ]);
-            }
-
-            $cotizacion->update([
-                'sw_estado'         => 'convertida',
-                'orden_servicio_id' => $orden->orden_servicio_id,
-            ]);
+            ], $request->user()->usuario_id);
 
             DB::commit();
 
@@ -391,6 +376,11 @@ class CotizacionController extends Controller
 
     /**
      * Enviar cotización por correo electrónico con PDF adjunto
+     * y, opcionalmente, documentos adicionales (multipart: adjuntos[]).
+     *
+     * Si la cotización está en borrador/enviada, el correo lleva un botón para que el cliente
+     * la apruebe y firme en línea (enlace con token y vigencia). Al aprobar se crea la orden de
+     * servicio sin fechas ni condiciones: quien la edita después las completa.
      */
     public function enviarEmail(Request $request, $id)
     {
@@ -400,16 +390,57 @@ class CotizacionController extends Controller
             return response()->json(['message' => 'Cotización no encontrada'], 404);
         }
 
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
+        $conAprobacion = in_array($cotizacion->sw_estado, ['borrador', 'enviada'], true);
+
+        $rules = [
+            'email'       => 'required|email',
+            'adjuntos'    => 'nullable|array|max:5',
+            'adjuntos.*'  => 'file|max:10240|mimes:pdf',
+        ];
+
+        $validator = Validator::make($request->all(), $rules, [
+            'adjuntos.max'   => 'Puede adjuntar máximo 5 documentos.',
+            'adjuntos.*.max' => 'Cada documento adjunto debe pesar máximo 10 MB.',
+            'adjuntos.*.mimes' => 'Solo se admiten documentos en formato PDF.',
+            'adjuntos.*.uploaded' => 'No se pudo subir uno de los adjuntos (revise que no supere el límite del servidor).',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json([
+                'message' => $validator->errors()->first(),
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
+
+        // Vigencia del enlace: hasta el vencimiento de la cotización, o N días si no lo tiene
+        $enlaceExpiraEn = null;
+        if ($conAprobacion) {
+            $enlaceExpiraEn = $cotizacion->fecha_vencimiento
+                ? $cotizacion->fecha_vencimiento->copy()->endOfDay()
+                : now()->addDays(config('cotizaciones.dias_vigencia_enlace', 30));
+
+            if ($enlaceExpiraEn->isPast()) {
+                return response()->json([
+                    'message' => 'La cotización ya venció; no se puede enviar para aprobación. Ajuste la fecha de vencimiento.',
+                ], 422);
+            }
         }
 
         try {
             $cotizacion->append('tercero');
+
+            // Enlace de aprobación (en BD se guarda solo el hash del token)
+            $enlaceAprobacion = null;
+            if ($conAprobacion) {
+                $token = Str::random(64);
+
+                $cotizacion->update([
+                    'token_aprobacion'           => hash('sha256', $token),
+                    'token_aprobacion_expira_en' => $enlaceExpiraEn,
+                ]);
+
+                $enlaceAprobacion = $this->urlFrontend($request) . "/#/aprobar-cotizacion/{$cotizacion->cotizacion_id}/{$token}";
+            }
 
             // Generar PDF en archivo temporal
             $pdf = Pdf::loadView('pdf.cotizacion', compact('cotizacion'))
@@ -418,10 +449,35 @@ class CotizacionController extends Controller
             $tmpPath = tempnam(sys_get_temp_dir(), 'cot_') . '.pdf';
             $pdf->save($tmpPath);
 
-            // Enviar correo con PDF adjunto
-            Mail::to($request->email)->send(new CotizacionMail($cotizacion, $tmpPath));
+            // Documentos adicionales subidos por el usuario (se leen del temporal de PHP, no se guardan)
+            $adjuntos = collect($request->file('adjuntos', []))
+                ->map(fn ($archivo) => [
+                    'path' => $archivo->getRealPath(),
+                    'name' => $archivo->getClientOriginalName(),
+                    'mime' => $archivo->getMimeType(),
+                ])
+                ->all();
 
-            @unlink($tmpPath);
+            // Enviar correo con PDF adjunto
+            try {
+                Mail::to($request->email)->send(
+                    new CotizacionMail($cotizacion, $tmpPath, $adjuntos, $enlaceAprobacion, $enlaceExpiraEn)
+                );
+
+                // Copia a los correos internos (sin enlace de aprobación); un fallo aquí no afecta el envío al cliente
+                $internos = config('cotizaciones.correos_aprobacion', []);
+                if (config('cotizaciones.enviar_copia_internos') && !empty($internos)) {
+                    try {
+                        Mail::to($internos)->send(
+                            new CotizacionMail($cotizacion, $tmpPath, $adjuntos, null, null, $request->email)
+                        );
+                    } catch (\Throwable $e) {
+                        Log::error("Error enviando copia interna de {$cotizacion->numero_cotizacion}: " . $e->getMessage());
+                    }
+                }
+            } finally {
+                @unlink($tmpPath);
+            }
 
             // Cambiar estado a "enviada" si estaba en borrador
             if ($cotizacion->sw_estado === 'borrador') {
